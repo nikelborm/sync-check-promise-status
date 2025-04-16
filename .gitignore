@@ -1,0 +1,12 @@
+_
+.env
+/gh-page/coverage
+dist
+docker
+node_modules
+package-lock.json
+sync-check-promise-status*.tgz
+scratchpad.ts
+stats.html
+temp.json
+tmp
