@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/denoland/deno/refs/heads/main/cli/schemas/config-file.v1.json",
+  "name": "@nikelborm/sync-check-promise-status",
+  "version": "1.0.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./index.ts",
+    "./index": "./index.ts",
+    "./index.ts": "./index.ts",
+    "./errors": "./errors.ts",
+    "./errors.ts": "./errors.ts",
+    "./consts": "./consts.ts",
+    "./consts.ts": "./consts.ts",
+    "./types": "./types.ts",
+    "./types.ts": "./types.ts",
+    "./wrapPromise": "./wrapPromise.ts",
+    "./wrapPromise.ts": "./wrapPromise.ts",
+    "./patchPromiseGlobally": "./patchPromiseGlobally.ts",
+    "./patchPromiseGlobally.ts": "./patchPromiseGlobally.ts"
+  },
+  "publish": {
+    "include": [
+      ".github/FUNDING.yml",
+      "types.ts",
+      "errors.ts",
+      "consts.ts",
+      "index.ts",
+      "wrapPromise.ts",
+      "patchPromiseGlobally.ts",
+      "README.md",
+      "LICENSE"
+    ],
+    "exclude": ["**/*.spec.*", "scratchpad.*"]
+  }
+}
