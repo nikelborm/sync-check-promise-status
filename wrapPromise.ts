@@ -1,49 +1,23 @@
-import { FLAG_ENUM, type FlagEnumKeys, type FlagEnumValues } from './consts.ts';
+import { FLAG_ENUM, type FlagEnumKeys } from './consts.ts';
 import type { Gen, Resolution } from './types.ts';
 
 export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
   promise: PromiseLike<Result>,
   ctx?: Context,
-  predefinedResolution: Resolution<NoInfer<Result>> = {
-    status: FLAG_ENUM.PENDING,
-    value: undefined,
-  },
+  externallyManagedResolution?: Resolution<NoInfer<Result>>,
 ) => {
-  let resolution: Resolution<Result> = predefinedResolution;
+  let resolution: Resolution<Result> =
+    externallyManagedResolution ?? getNewPendingResolution();
 
-  const setResolution =
-    <const T extends FlagEnumKeys>(status: T) =>
-    (
-      value: Extract<
-        Resolution<Result>,
-        { status: (typeof FLAG_ENUM)[T] }
-      >['value'],
-    ) => {
-      // @ts-expect-error ts please be smarter
-      resolution = { status: FLAG_ENUM[status as T], value };
-    };
+  const trackingPromise =
+    is(resolution, 'PENDING') && !externallyManagedResolution
+      ? (() => {
+          const { fulfill, reject } = getResolutionSetters<Result>(resolution);
+          return promise.then(fulfill, reject);
+        })()
+      : null;
 
-  const processSynchronously = (
-    wrapInPrimitivePromise: boolean,
-    promiseMethodCallback: Function,
-  ) => {
-    try {
-      const result = promiseMethodCallback(resolution.value);
-
-      if (isPromiseLike(result)) return wrapPromiseInStatusMonitor(result);
-      else return wrapInPrimitivePromise ? PromiseResolve(result) : result;
-    } catch (error) {
-      if (wrapInPrimitivePromise) return PromiseReject(error);
-      else throw error;
-    }
-  };
-
-  const fulfill = setResolution('FULFILLED');
-  const reject = setResolution('REJECTED');
-
-  const trackingPromise = is(resolution, 'PENDING')
-    ? promise.then(fulfill, reject)
-    : null;
+  const scopedProcessSynchronously = processSynchronously(resolution);
 
   const promiseHandlers = {
     get(targetPromise, accessedPromiseKey, receiverProxy) {
@@ -118,23 +92,38 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
               'catch',
             )
           ) {
-            const actOnSettled = (wrapInPrimitivePromise: boolean) => () => {
-              // if parent's resolution is resolved, setting `catch` is useless
-              if (is(resolution, 'FULFILLED')) return receiverProxy;
+            const actOnSettled =
+              (isItPassedAsPromiseCallback?: boolean) => () => {
+                // if parent's resolution is resolved, setting `catch` is useless
+                if (is(resolution, 'FULFILLED'))
+                  return isItPassedAsPromiseCallback
+                    ? resolution.value
+                    : receiverProxy;
 
-              // onRejected is guaranteed to be valid by areAllMethodArgsGarbage,
-              // because catch accepts only 1 parameter and if it were invalid,
-              // we will get cleanArgs.length === 0
-              return processSynchronously(wrapInPrimitivePromise, cleanArgs[0]);
-            };
+                // onRejected is guaranteed to be valid by areAllMethodArgsGarbage,
+                // because catch accepts only 1 parameter and if it were invalid,
+                // we will get cleanArgs.filter(...).length === 0
+                return scopedProcessSynchronously(
+                  cleanArgs[0],
+                  !isItPassedAsPromiseCallback,
+                );
+              };
 
-            if (is(resolution, 'PENDING'))
-              return wrapPromiseInStatusMonitor(
-                trackingPromise!.then(actOnSettled(false)),
+            if (is(resolution, 'PENDING')) {
+              let localResolutionOfNextChainStep = getNewPendingResolution();
+              let { fulfill, reject } = getResolutionSetters<unknown>(
+                localResolutionOfNextChainStep,
               );
 
-            return actOnSettled(true)();
+              return wrapPromiseInStatusMonitor(
+                trackingPromise!.then(actOnSettled(true)),
+                localResolutionOfNextChainStep,
+              );
+            }
+
+            return actOnSettled(false)();
           }
+
           if (
             isSpecificPromiseMethod(
               targetPromiseMethod,
@@ -142,7 +131,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
               'then',
             )
           ) {
-            const actOnSettled = (wrapInPrimitivePromise: boolean) => () => {
+            const actOnSettled = (isItPromiseCallback?: boolean) => () => {
               const appropriateCallback =
                 cleanArgs[+is(resolution, 'REJECTED')];
 
@@ -151,35 +140,36 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
               // undefined when user passes only the first param like
               // `.then(onFulfilled)`, or invalid for other reason), then
               // `.then` call is useless. Same logic for onFulfilled.
-              if (!isValidPromiseMethodCallback(appropriateCallback))
+              if (!isValidPromiseMethodCallback(appropriateCallback)) {
                 return receiverProxy;
+              }
 
-              return processSynchronously(
-                wrapInPrimitivePromise,
+              return scopedProcessSynchronously(
                 appropriateCallback,
+                !isItPromiseCallback,
               );
             };
 
             if (is(resolution, 'PENDING'))
               return wrapPromiseInStatusMonitor(
-                trackingPromise!.then(actOnSettled(false)),
+                trackingPromise!.then(actOnSettled(true)),
               );
 
-            return actOnSettled(true)();
+            return actOnSettled()();
           }
 
-          // if (
-          //   isSpecificPromiseMethod(
-          //     targetPromiseMethod,
-          //     accessedPromiseKey,
-          //     'finally',
-          //   )
-          // ) {
-          //   // onFinally is guaranteed to be valid by areAllMethodArgsGarbage,
-          //   // because catch accepts only 1 parameter and if it were invalid,
-          //   // we will get cleanArgs.length === 0
-          //   const [onFinally] = cleanArgs;
-          // }
+          if (
+            isSpecificPromiseMethod(
+              targetPromiseMethod,
+              accessedPromiseKey,
+              'finally',
+            )
+          ) {
+            // onFinally is guaranteed to be valid by areAllMethodArgsGarbage,
+            // because catch accepts only 1 parameter and if it were invalid,
+            // we will get cleanArgs.filter(...).length === 0
+            const [onFinally] = cleanArgs;
+          }
           return Reflect.apply(
             targetPromiseMethod.bind(targetPromise),
             thisOfPromiseMethod,
@@ -193,9 +183,59 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
   return new Proxy(promise, promiseHandlers) as Gen<Context, Result>;
 };
 
+type ExtractSpecificResolutions<
+  TResolution extends Resolution<any>,
+  FlagEnumKey extends FlagEnumKeys,
+> = Extract<TResolution, { status: (typeof FLAG_ENUM)[FlagEnumKey] }>;
+
+type ResolutionSetter<FlagEnumKey extends FlagEnumKeys, Result = never> = (
+  value: ExtractSpecificResolutions<Resolution<Result>, FlagEnumKey>['value'],
+) => void;
+
+const getResolutionSetters = <Result = never>(
+  resolution: Resolution<Result>,
+) => {
+  const setResolution =
+    <const FlagEnumKey extends FlagEnumKeys>(
+      status: FlagEnumKey,
+    ): ResolutionSetter<FlagEnumKey, Result> =>
+    value => {
+      resolution.status = FLAG_ENUM[status];
+      resolution.value = value;
+    };
+
+  const fulfill = setResolution('FULFILLED');
+  const reject = setResolution('REJECTED');
+
+  return { fulfill, reject };
+};
+
+const processSynchronously =
+  <Result = never>(resolution: Resolution<Result>) =>
+  (promiseMethodCallback: Function, wrapInPrimitivePromise?: boolean) => {
+    if (!wrapInPrimitivePromise) return promiseMethodCallback(resolution.value);
+
+    try {
+      const result = promiseMethodCallback(resolution.value);
+
+      // TODO: experimentally test removing those wrappers for performance reasons
+      return isPromiseLike(result)
+        ? wrapPromiseInStatusMonitor(result)
+        : PromiseResolve(result);
+    } catch (error) {
+      return PromiseReject(error);
+    }
+  };
+
+const getNewPendingResolution = () => ({
+  status: FLAG_ENUM.PENDING,
+  value: undefined,
+});
+
 type PromiseMethods = 'then' | 'catch' | 'finally';
 
 const isSpecificPromiseMethod = <const ExpectedKey extends PromiseMethods>(
+  // takes this argument only to make typescript hints
   method: Function,
   currentKey: PromiseMethods,
   expectedKey: ExpectedKey,
@@ -221,12 +261,14 @@ const isPromise = (t: unknown): t is Promise<unknown> =>
 
 const isValidPromiseMethodCallback = (t: unknown) => typeof t === 'function';
 
-const is = <const T extends FlagEnumKeys, U extends { status: FlagEnumValues }>(
-  // takes this argument only to make typescript hints
-  _resolution: U,
-  statusToCheckFor: T,
-): _resolution is Extract<U, { status: (typeof FLAG_ENUM)[T] }> =>
-  _resolution.status === FLAG_ENUM[statusToCheckFor];
+const is = <
+  const FlagEnumKey extends FlagEnumKeys,
+  TResolution extends Resolution<any>,
+>(
+  resolution: TResolution,
+  statusToCheckFor: FlagEnumKey,
+): resolution is ExtractSpecificResolutions<TResolution, FlagEnumKey> =>
+  resolution.status === FLAG_ENUM[statusToCheckFor];
 
 const PromiseResolve = <T>(value: T) =>
   wrapPromiseInStatusMonitor(Promise.resolve(value) as Promise<T>, undefined, {
