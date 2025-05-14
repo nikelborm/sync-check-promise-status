@@ -93,35 +93,45 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
             )
           ) {
             const actOnSettled =
-              (isItPassedAsPromiseCallback?: boolean) => () => {
+              (asyncContext?: {
+                fulfill: (value: unknown) => void;
+                reject: (value: unknown) => void;
+              }) =>
+              () => {
+                const appropriateCallback = is(resolution, 'REJECTED')
+                  ? cleanArgs[0]
+                  : null;
+
                 // if parent's resolution is resolved, setting `catch` is useless
-                if (is(resolution, 'FULFILLED'))
-                  return isItPassedAsPromiseCallback
-                    ? resolution.value
-                    : receiverProxy;
+                if (!isValidPromiseMethodCallback(appropriateCallback)) {
+                  if (asyncContext) {
+                    asyncContext.fulfill(resolution.value);
+                    return resolution.value;
+                  }
+                  return receiverProxy;
+                }
 
                 // onRejected is guaranteed to be valid by areAllMethodArgsGarbage,
                 // because catch accepts only 1 parameter and if it were invalid,
                 // we will get cleanArgs.filter(...).length === 0
                 return scopedProcessSynchronously(
-                  cleanArgs[0],
-                  !isItPassedAsPromiseCallback,
+                  appropriateCallback,
+                  asyncContext,
                 );
               };
 
-            if (is(resolution, 'PENDING')) {
-              let localResolutionOfNextChainStep = getNewPendingResolution();
-              let { fulfill, reject } = getResolutionSetters<unknown>(
-                localResolutionOfNextChainStep,
-              );
+            if (!is(resolution, 'PENDING')) return actOnSettled()();
 
-              return wrapPromiseInStatusMonitor(
-                trackingPromise!.then(actOnSettled(true)),
-                localResolutionOfNextChainStep,
-              );
-            }
+            let localResolutionOfNextChainStep = getNewPendingResolution();
 
-            return actOnSettled(false)();
+            return wrapPromiseInStatusMonitor(
+              trackingPromise!.then(
+                actOnSettled(
+                  getResolutionSetters<unknown>(localResolutionOfNextChainStep),
+                ),
+              ),
+              localResolutionOfNextChainStep,
+            );
           }
 
           if (
@@ -131,31 +141,46 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
               'then',
             )
           ) {
-            const actOnSettled = (isItPromiseCallback?: boolean) => () => {
-              const appropriateCallback =
-                cleanArgs[+is(resolution, 'REJECTED')];
+            const actOnSettled =
+              (asyncContext?: {
+                fulfill: (value: unknown) => void;
+                reject: (value: unknown) => void;
+              }) =>
+              () => {
+                const appropriateCallback =
+                  cleanArgs[+is(resolution, 'REJECTED')];
 
-              // if parent's resolution is rejected, the only thing that matters
-              // is presence of onRejected callback. If CB is invalid (be it
-              // undefined when user passes only the first param like
-              // `.then(onFulfilled)`, or invalid for other reason), then
-              // `.then` call is useless. Same logic for onFulfilled.
-              if (!isValidPromiseMethodCallback(appropriateCallback)) {
-                return receiverProxy;
-              }
+                // if parent's resolution is rejected, the only thing that matters
+                // is presence of onRejected callback. If CB is invalid (be it
+                // undefined when user passes only the first param like
+                // `.then(onFulfilled)`, or invalid for other reason), then
+                // `.then` call is useless. Same logic for onFulfilled.
+                if (!isValidPromiseMethodCallback(appropriateCallback)) {
+                  if (asyncContext) {
+                    asyncContext.fulfill(resolution.value);
+                    return resolution.value;
+                  }
+                  return receiverProxy;
+                }
 
-              return scopedProcessSynchronously(
-                appropriateCallback,
-                !isItPromiseCallback,
-              );
-            };
+                return scopedProcessSynchronously(
+                  appropriateCallback,
+                  asyncContext,
+                );
+              };
 
-            if (is(resolution, 'PENDING'))
-              return wrapPromiseInStatusMonitor(
-                trackingPromise!.then(actOnSettled(true)),
-              );
+            if (!is(resolution, 'PENDING')) return actOnSettled()();
 
-            return actOnSettled()();
+            let localResolutionOfNextChainStep = getNewPendingResolution();
+
+            return wrapPromiseInStatusMonitor(
+              trackingPromise!.then(
+                actOnSettled(
+                  getResolutionSetters<unknown>(localResolutionOfNextChainStep),
+                ),
+              ),
+              localResolutionOfNextChainStep,
+            );
           }
 
           if (
@@ -212,17 +237,34 @@ const getResolutionSetters = <Result = never>(
 
 const processSynchronously =
   <Result = never>(resolution: Resolution<Result>) =>
-  (promiseMethodCallback: Function, wrapInPrimitivePromise?: boolean) => {
-    if (!wrapInPrimitivePromise) return promiseMethodCallback(resolution.value);
-
+  (
+    promiseMethodCallback: Function,
+    asyncContext?: {
+      fulfill: (value: unknown) => void;
+      reject: (value: unknown) => void;
+    },
+  ) => {
     try {
       const result = promiseMethodCallback(resolution.value);
 
       // TODO: experimentally test removing those wrappers for performance reasons
-      return isPromiseLike(result)
+      if (asyncContext) {
+        if (isThenable(result)) {
+          return result.then(asyncContext.fulfill, asyncContext.reject);
+        } else {
+          asyncContext.fulfill(result);
+          return result;
+        }
+      }
+
+      return isThenable(result)
         ? wrapPromiseInStatusMonitor(result)
         : PromiseResolve(result);
     } catch (error) {
+      if (asyncContext) {
+        asyncContext.reject(error);
+        throw error;
+      }
       return PromiseReject(error);
     }
   };
@@ -241,14 +283,14 @@ const isSpecificPromiseMethod = <const ExpectedKey extends PromiseMethods>(
   expectedKey: ExpectedKey,
 ): method is Promise<any>[ExpectedKey] => currentKey === expectedKey;
 
-const isPromiseLike = (t: unknown): t is PromiseLike<unknown> =>
+const isThenable = (t: unknown): t is PromiseLike<unknown> =>
   typeof t === 'object' &&
   t !== null &&
   'then' in t &&
   typeof t.then === 'function';
 
 const isPromise = (t: unknown): t is Promise<unknown> =>
-  isPromiseLike(t) &&
+  isThenable(t) &&
   t.then.length === 2 &&
   Symbol.toStringTag in t &&
   t[Symbol.toStringTag] === 'Promise' &&
