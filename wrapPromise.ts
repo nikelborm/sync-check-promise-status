@@ -79,8 +79,8 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
 
       return new Proxy(valueAtKeyInPromise, {
         apply(
-          targetPromiseMethod: Function,
-          thisOfPromiseMethod,
+          _targetPromiseMethod: Function,
+          _thisOfPromiseMethod,
           promiseMethodCallArgArray,
         ) {
           const buildReturnValue = (
@@ -194,12 +194,12 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
             );
           }
 
-          if (accessedPromiseKey === 'finally') {
-            // onFinally is guaranteed to be valid by areAllMethodArgsGarbage,
-            // because catch accepts only 1 parameter and if it were invalid,
-            // we will get cleanArgs.filter(...).length === 0
-            const [onFinally] = promiseMethodCallArgArray;
-          }
+          // if (accessedPromiseKey === 'finally') {
+          //   // onFinally is guaranteed to be valid by areAllMethodArgsGarbage,
+          //   // because catch accepts only 1 parameter and if it were invalid,
+          //   // we will get cleanArgs.filter(...).length === 0
+          //   const [onFinally] = promiseMethodCallArgArray;
+          // }
 
           assertSanity(
             `How the fuck did you got here????`,
@@ -247,20 +247,13 @@ const getNewPendingResolution = () => ({
 
 type PromiseMethods = 'then' | 'catch' | 'finally';
 
-const isSpecificPromiseMethod = <const ExpectedKey extends PromiseMethods>(
-  // takes this argument only to make typescript hints
-  method: Function,
-  currentKey: PromiseMethods,
-  expectedKey: ExpectedKey,
-): method is Promise<any>[ExpectedKey] => currentKey === expectedKey;
-
 const isThenable = (t: unknown): t is PromiseLike<unknown> =>
   typeof t === 'object' &&
   t !== null &&
   'then' in t &&
   typeof t.then === 'function';
 
-const isPromise = (t: unknown): t is Promise<unknown> =>
+export const isPromise = (t: unknown): t is Promise<unknown> =>
   isThenable(t) &&
   t.then.length === 2 &&
   Symbol.toStringTag in t &&
