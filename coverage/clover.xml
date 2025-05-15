@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1747296214290" clover="3.2.0">
-  <project timestamp="1747296214290" name="All files">
+<coverage generated="1747297913237" clover="3.2.0">
+  <project timestamp="1747297913237" name="All files">
     <metrics statements="240" coveredstatements="216" conditionals="90" coveredconditionals="87" methods="22" coveredmethods="20" elements="352" coveredelements="323" complexity="0" loc="240" ncloc="240" packages="1" files="4" classes="4"/>
     <file name="consts.ts" path="/home/runner/work/sync-check-promise-status/sync-check-promise-status/consts.ts">
       <metrics statements="15" coveredstatements="15" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
