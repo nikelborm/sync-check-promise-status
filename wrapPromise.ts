@@ -83,20 +83,6 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
           thisOfPromiseMethod,
           promiseMethodCallArgArray,
         ) {
-          // const cleanArgs = promiseMethodCallArgArray.slice(
-
-          //   0,
-
-          //   accessedPromiseKey === 'then' ? 2 : 1,
-          // );
-
-          // if it's [], [undefined], [undefined, undefined] etc
-          // const areAllMethodArgsGarbage = !cleanArgs.filter(e =>
-          //   isValidPromiseMethodCallback(e),
-          // ).length;
-
-          // if (areAllMethodArgsGarbage) return receiverProxy;
-
           const buildReturnValue = (
             buildAppropriateCallback: () => Function,
           ) => {
@@ -124,6 +110,16 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                 const appropriatePromiseMethodCallback =
                   buildAppropriateCallback();
 
+                const fulfill = (result: unknown) => {
+                  removeWarning();
+                  asyncContext!.fulfill(result);
+                  return result;
+                };
+
+                const reject = (error: unknown) => {
+                  asyncContext!.reject(error);
+                  throw error;
+                };
                 // if parent's resolution is rejected, the only thing that matters is
                 // presence of onRejected callback. If CB is invalid (be it undefined when
                 // user passes only the first param like `.then(onFulfilled)`, or invalid
@@ -136,14 +132,9 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                 ) {
                   if (!asyncContext) return receiverProxy;
 
-                  if (is(parentChainLinkResolution, 'FULFILLED')) {
-                    // removeWarning();
-                    asyncContext.fulfill(parentChainLinkResolution.value);
-                    return parentChainLinkResolution.value;
-                  }
-
-                  asyncContext.reject(parentChainLinkResolution.value);
-                  throw parentChainLinkResolution.value;
+                  if (is(parentChainLinkResolution, 'FULFILLED'))
+                    return fulfill(parentChainLinkResolution.value);
+                  reject(parentChainLinkResolution.value);
                 }
 
                 try {
@@ -153,22 +144,11 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
 
                   if (asyncContext) {
                     if (isThenable(childChainLinkResult)) {
-                      return childChainLinkResult.then(
-                        result => {
-                          removeWarning();
-                          asyncContext.fulfill(result);
-                          return result;
-                        },
-                        reject => {
-                          asyncContext.reject(reject);
-                          throw reject;
-                        },
-                      );
+                      // TODO: why the fuck removal of this .then shit doesn't change anything
+                      return childChainLinkResult.then(fulfill, reject);
                     }
 
-                    removeWarning();
-                    asyncContext.fulfill(childChainLinkResult);
-                    return childChainLinkResult;
+                    return fulfill(childChainLinkResult);
                   }
 
                   removeWarning();
@@ -176,10 +156,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                     ? wrapPromiseInStatusMonitor(childChainLinkResult)
                     : PromiseResolve(childChainLinkResult);
                 } catch (error) {
-                  if (asyncContext) {
-                    asyncContext.reject(error);
-                    throw error;
-                  }
+                  if (asyncContext) reject(error);
                   removeWarning();
                   return PromiseReject(error);
                 }
@@ -189,11 +166,6 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
               return actOnSettled()();
 
             let localResolutionOfNextChainStep = getNewPendingResolution();
-
-            assertSanity(
-              `can't call trackingPromise.then because it's null???`,
-              () => !!trackingPromise,
-            );
 
             return wrapPromiseInStatusMonitor(
               trackingPromise!.then(
@@ -205,13 +177,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
             );
           };
 
-          if (
-            isSpecificPromiseMethod(
-              targetPromiseMethod,
-              accessedPromiseKey,
-              'catch',
-            )
-          ) {
+          if (accessedPromiseKey === 'catch') {
             return buildReturnValue(() =>
               is(parentChainLinkResolution, 'REJECTED')
                 ? promiseMethodCallArgArray[0]
@@ -219,13 +185,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
             );
           }
 
-          if (
-            isSpecificPromiseMethod(
-              targetPromiseMethod,
-              accessedPromiseKey,
-              'then',
-            )
-          ) {
+          if (accessedPromiseKey === 'then') {
             return buildReturnValue(
               () =>
                 promiseMethodCallArgArray[
@@ -234,13 +194,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
             );
           }
 
-          if (
-            isSpecificPromiseMethod(
-              targetPromiseMethod,
-              accessedPromiseKey,
-              'finally',
-            )
-          ) {
+          if (accessedPromiseKey === 'finally') {
             // onFinally is guaranteed to be valid by areAllMethodArgsGarbage,
             // because catch accepts only 1 parameter and if it were invalid,
             // we will get cleanArgs.filter(...).length === 0

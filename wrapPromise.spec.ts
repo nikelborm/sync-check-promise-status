@@ -16,6 +16,7 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('isFulfilled', true);
     expect(promise).toHaveProperty('isRejected', false);
 
+    // @ts-expect-error intentional
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get error of fulfilled promise. Did you mean to access .result?]`,
     );
@@ -28,6 +29,7 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('status', 'fulfilled');
 
     expect(promise).toHaveProperty('result', 'ok');
+    // @ts-expect-error intentional
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get error of fulfilled promise. Did you mean to access .result?]`,
     );
@@ -43,6 +45,7 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('isFulfilled', false);
     expect(promise).toHaveProperty('isRejected', true);
 
+    // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get result of rejected promise. Did you mean to access .error?]`,
     );
@@ -61,6 +64,7 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('status', 'rejected');
 
     expect(promise).toHaveProperty('error', 'err message');
+    // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get result of rejected promise. Did you mean to access .error?]`,
     );
@@ -75,9 +79,11 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('isSettled', false);
     expect(promise).toHaveProperty('isFulfilled', false);
     expect(promise).toHaveProperty('isRejected', false);
+    // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get result of pending promise]`,
     );
+    // @ts-expect-error intentional
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get error of pending promise]`,
     );
@@ -89,6 +95,7 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('status', 'fulfilled');
 
     expect(promise).toHaveProperty('result', 'ok');
+    // @ts-expect-error intentional
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get error of fulfilled promise. Did you mean to access .result?]`,
     );
@@ -103,9 +110,11 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('isSettled', false);
     expect(promise).toHaveProperty('isFulfilled', false);
     expect(promise).toHaveProperty('isRejected', false);
+    // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get result of pending promise]`,
     );
+    // @ts-expect-error intentional
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get error of pending promise]`,
     );
@@ -123,6 +132,7 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('status', 'rejected');
 
     expect(promise).toHaveProperty('error', 'err message');
+    // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get result of rejected promise. Did you mean to access .error?]`,
     );
@@ -130,15 +140,17 @@ describe('primitive tests', async () => {
 
   it('correctly handles delayed Promise which resolves', async () => {
     const promise = wrapPromiseInStatusMonitor(
-      new Promise((resolve, reject) => {
+      new Promise((resolve, _reject) => {
         setTimeout(() => resolve('ok'), 10);
       }),
     );
 
     expect(promise).toHaveProperty('status', 'pending');
+    // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get result of pending promise]`,
     );
+    // @ts-expect-error intentional
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get error of pending promise]`,
     );
@@ -150,6 +162,7 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('status', 'fulfilled');
 
     expect(promise).toHaveProperty('result', 'ok');
+    // @ts-expect-error intentional
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get error of fulfilled promise. Did you mean to access .result?]`,
     );
@@ -157,15 +170,17 @@ describe('primitive tests', async () => {
 
   it('correctly handles delayed Promise which throws', async () => {
     const promise = wrapPromiseInStatusMonitor(
-      new Promise((resolve, reject) => {
+      new Promise((_resolve, reject) => {
         setTimeout(() => reject('err message'), 10);
       }),
     );
 
     expect(promise).toHaveProperty('status', 'pending');
+    // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get result of pending promise]`,
     );
+    // @ts-expect-error intentional
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get error of pending promise]`,
     );
@@ -183,6 +198,7 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('status', 'rejected');
 
     expect(promise).toHaveProperty('error', 'err message');
+    // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get result of rejected promise. Did you mean to access .error?]`,
     );
@@ -204,22 +220,30 @@ describe('deduplication of Promises', () => {
 
     assert(promise === promise.catch(), 'Should be the same object');
     assert(promise === promise.catch(undefined), 'Should be the same object');
+
     assert(
+      // @ts-expect-error intentional
       promise === promise.catch(undefined, undefined),
       'Should be the same object',
     );
     assert(
+      // @ts-expect-error intentional
       promise === promise.catch(undefined, () => {}),
       'Should be the same object',
     );
+    // @ts-expect-error intentional
     assert(promise === promise.catch(false), 'Should be the same object');
     assert(promise === promise.catch(null), 'Should be the same object');
+    // @ts-expect-error intentional
     assert(promise === promise.catch('null'), 'Should be the same object');
+    // @ts-expect-error intentional
     assert(promise === promise.catch(123), 'Should be the same object');
     assert(
-      promise === promise.catch(new Promise(resolve => resolve('asdda'))),
+      // @ts-expect-error intentional
+      promise === promise.catch(new Promise(resolve => resolve('hello'))),
       'Should be the same object',
     );
+    // @ts-expect-error intentional
     assert(promise === promise.catch(98n), 'Should be the same object');
   });
 
@@ -236,14 +260,19 @@ describe('deduplication of Promises', () => {
       promise === promise.then(undefined, undefined),
       'Should be the same object',
     );
+    // @ts-expect-error intentional
     assert(promise === promise.then(false), 'Should be the same object');
     assert(promise === promise.then(null), 'Should be the same object');
+    // @ts-expect-error intentional
     assert(promise === promise.then('null'), 'Should be the same object');
+    // @ts-expect-error intentional
     assert(promise === promise.then(123), 'Should be the same object');
     assert(
-      promise === promise.then(new Promise(resolve => resolve('asdda'))),
+      // @ts-expect-error intentional
+      promise === promise.then(new Promise(resolve => resolve('hello'))),
       'Should be the same object',
     );
+    // @ts-expect-error intentional
     assert(promise === promise.then(98n), 'Should be the same object');
   });
 
@@ -257,6 +286,7 @@ describe('deduplication of Promises', () => {
       'Should be the same object',
     );
     assert(
+      // @ts-expect-error intentional
       promise === promise.then(undefined, false),
       'Should be the same object',
     );
@@ -265,19 +295,23 @@ describe('deduplication of Promises', () => {
       'Should be the same object',
     );
     assert(
+      // @ts-expect-error intentional
       promise === promise.then(undefined, 'null'),
       'Should be the same object',
     );
     assert(
+      // @ts-expect-error intentional
       promise === promise.then(undefined, 123),
       'Should be the same object',
     );
     assert(
       promise ===
-        promise.then(undefined, new Promise(resolve => resolve('asdda'))),
+        // @ts-expect-error intentional
+        promise.then(undefined, new Promise(resolve => resolve('hello'))),
       'Should be the same object',
     );
     assert(
+      // @ts-expect-error intentional
       promise === promise.then(undefined, 98n),
       'Should be the same object',
     );
@@ -540,7 +574,7 @@ describe('channel switches', () => {
     expect(mockOnRejected3).toHaveBeenCalledWith('err2');
     expect(mockOnRejected4).toHaveBeenCalledWith('err3');
 
-    promise.then(void 0, arg => {});
+    promise.then(void 0, _arg => {});
   });
 
   it('properly flows from catch to catch in async context', async () => {
@@ -570,7 +604,7 @@ describe('specific rare branches', () => {
   it('branch1', async () => {
     const mock1 = vi.fn();
     const promise = wrapPromiseInStatusMonitor(
-      new Promise((resolve, reject) => {
+      new Promise((_resolve, reject) => {
         setTimeout(() => reject('err message1'), 10);
       }),
     );
@@ -579,21 +613,21 @@ describe('specific rare branches', () => {
       .catch()
       .catch(
         err =>
-          new Promise((resolve, reject) => {
+          new Promise((_resolve, reject) => {
             mock1();
             setTimeout(() => reject(err + '=> err message2'), 10);
           }),
       )
       .catch(
         err =>
-          new Promise((resolve, reject) => {
+          new Promise((_resolve, reject) => {
             mock1();
             setTimeout(() => reject(err + '=> err message3'), 10);
           }),
       )
       .catch(
         err =>
-          new Promise((resolve, reject) => {
+          new Promise((_resolve, reject) => {
             mock1();
             setTimeout(() => reject(err + '=> err message4'), 10);
           }),
@@ -618,7 +652,7 @@ describe('specific rare branches', () => {
   it('branch2', async () => {
     const mock1 = vi.fn();
     const promise = wrapPromiseInStatusMonitor(
-      new Promise((resolve, reject) => {
+      new Promise((resolve, _reject) => {
         setTimeout(() => resolve('ok message1'), 10);
       }),
     );
@@ -627,14 +661,14 @@ describe('specific rare branches', () => {
       .catch()
       .then(
         ok =>
-          new Promise((resolve, reject) => {
+          new Promise((resolve, _reject) => {
             mock1();
             setTimeout(() => resolve(ok + '=> ok message2'), 10);
           }),
       )
       .then(
         ok =>
-          new Promise((resolve, reject) => {
+          new Promise((_resolve, reject) => {
             mock1();
             setTimeout(() => reject(ok + '=> err message3'), 10);
           }),
@@ -642,7 +676,7 @@ describe('specific rare branches', () => {
       .then(
         undefined,
         err =>
-          new Promise((resolve, reject) => {
+          new Promise((_resolve, reject) => {
             mock1();
             setTimeout(() => reject(err + '=> err message4'), 10);
           }),
@@ -650,21 +684,21 @@ describe('specific rare branches', () => {
       .then(
         undefined,
         err =>
-          new Promise((resolve, reject) => {
+          new Promise((_resolve, reject) => {
             mock1();
             setTimeout(() => reject(err + '=> err message5'), 10);
           }),
       )
       .catch(
         err =>
-          new Promise((resolve, reject) => {
+          new Promise((_resolve, reject) => {
             mock1();
             setTimeout(() => reject(err + '=> err message6'), 10);
           }),
       )
       .catch(
         err =>
-          new Promise((resolve, reject) => {
+          new Promise((_resolve, reject) => {
             mock1();
             setTimeout(() => reject(err + '=> err message7'), 10);
           }),
@@ -672,7 +706,7 @@ describe('specific rare branches', () => {
       .then(
         undefined,
         err =>
-          new Promise((resolve, reject) => {
+          new Promise((resolve, _reject) => {
             mock1();
             setTimeout(() => resolve(err + '=> ok message8'), 10);
           }),
@@ -696,5 +730,19 @@ describe('specific rare branches', () => {
     );
   });
 
-  it('branch3', () => {});
+  it('branch3', async () => {
+    const mock1 = vi.fn();
+
+    const result = await PromiseResolve('ok')
+      .then(
+        v =>
+          new Promise((_resolve, reject) => {
+            mock1();
+            setTimeout(() => reject(v + 'val'), 10);
+          }),
+      )
+      .catch(e => e + 's');
+
+    expect(result).toBe('okvals');
+  });
 });
