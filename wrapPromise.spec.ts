@@ -896,4 +896,15 @@ describe('specific rare branches', () => {
       promise2.catch(() => {});
     } else assert(false, 'promise.status of PromiseReject should be rejected');
   });
+
+  it('passes as Promise when converted to string', () => {
+    assert(
+      Promise.resolve(123)[Symbol.toStringTag] ===
+        PromiseResolve(123)[Symbol.toStringTag],
+    );
+    assert(
+      Promise.reject(123)[Symbol.toStringTag] ===
+        PromiseReject(123)[Symbol.toStringTag],
+    );
+  });
 });
