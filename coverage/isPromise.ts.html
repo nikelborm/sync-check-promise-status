@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for consts.ts</title>
+    <title>Code coverage report for isPromise.ts</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="prettify.css" />
     <link rel="stylesheet" href="base.css" />
@@ -19,34 +19,34 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="index.html">All files</a> consts.ts</h1>
+        <h1><a href="index.html">All files</a> isPromise.ts</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">37.5% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>15/15</span>
+                <span class='fraction'>6/16</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/0</span>
+                <span class='fraction'>4/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">50% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/0</span>
+                <span class='fraction'>1/2</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">37.5% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>15/15</span>
+                <span class='fraction'>6/16</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line high'></div>
+    <div class='status-line low'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -80,49 +80,40 @@
 <a name='L15'></a><a href='#L15'>15</a>
 <a name='L16'></a><a href='#L16'>16</a>
 <a name='L17'></a><a href='#L17'>17</a>
-<a name='L18'></a><a href='#L18'>18</a>
-<a name='L19'></a><a href='#L19'>19</a>
-<a name='L20'></a><a href='#L20'>20</a>
-<a name='L21'></a><a href='#L21'>21</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L18'></a><a href='#L18'>18</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">65x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">export const FLAG_ENUM = {
-  PENDING: 0b01,
-  FULFILLED: 0b10,
-  REJECTED: 0b00,
-} as const;
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">export const isThenable = (t: unknown): t is PromiseLike&lt;unknown&gt; =&gt;
+  typeof t === 'object' &amp;&amp;
+  t !== null &amp;&amp;
+  'then' in t &amp;&amp;
+  typeof t.then === 'function';
 &nbsp;
-export type FlagEnumKeys = keyof typeof FLAG_ENUM;
-export type FlagEnumValues = (typeof FLAG_ENUM)[FlagEnumKeys];
-&nbsp;
-export const newAddedProperties = new Set([
-  'isFulfilled',
-  'isPending',
-  'isRejected',
-  'isSettled',
-&nbsp;
-  'result',
-  'status',
-  'ctx',
-  'error',
-]);
+export const isPromise = <span class="fstat-no" title="function not covered" >(t: unknown): t is Promise&lt;unknown&gt; =&gt;</span>
+<span class="cstat-no" title="statement not covered" >  isThenable(t) &amp;&amp;</span>
+<span class="cstat-no" title="statement not covered" >  t.then.length === 2 &amp;&amp;</span>
+<span class="cstat-no" title="statement not covered" >  Symbol.toStringTag in t &amp;&amp;</span>
+<span class="cstat-no" title="statement not covered" >  t[Symbol.toStringTag] === 'Promise' &amp;&amp;</span>
+<span class="cstat-no" title="statement not covered" >  'catch' in t &amp;&amp;</span>
+<span class="cstat-no" title="statement not covered" >  typeof t.catch === 'function' &amp;&amp;</span>
+<span class="cstat-no" title="statement not covered" >  t.catch.length === 1 &amp;&amp;</span>
+<span class="cstat-no" title="statement not covered" >  'finally' in t &amp;&amp;</span>
+<span class="cstat-no" title="statement not covered" >  typeof t.finally === 'function' &amp;&amp;</span>
+<span class="cstat-no" title="statement not covered" >  t.finally.length === 1;</span>
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
