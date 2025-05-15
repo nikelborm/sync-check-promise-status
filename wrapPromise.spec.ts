@@ -745,4 +745,110 @@ describe('specific rare branches', () => {
 
     expect(result).toBe('okvals');
   });
+
+  it("Doesn't interpret non thenables in async context", async () => {
+    const value1 = await wrapPromiseInStatusMonitor(
+      new Promise(resolve => {
+        setTimeout(() => resolve(null), 2);
+      }),
+    );
+
+    expect(value1).toBe(null);
+
+    const obj2 = {};
+    const value2 = await wrapPromiseInStatusMonitor(
+      new Promise(resolve => {
+        setTimeout(() => resolve(obj2), 2);
+      }),
+    );
+
+    assert(value2 === obj2);
+
+    const obj3 = { then: 'string' };
+    const value3 = await wrapPromiseInStatusMonitor(
+      new Promise(resolve => {
+        setTimeout(() => resolve(obj3), 2);
+      }),
+    );
+
+    assert(value3 === obj3);
+
+    const obj4 = { then: null };
+    const value4 = await wrapPromiseInStatusMonitor(
+      new Promise(resolve => {
+        setTimeout(() => resolve(obj4), 2);
+      }),
+    );
+
+    assert(value4 === obj4);
+
+    const obj5 = {
+      catch: (onRejected: (val: unknown) => void) => {
+        onRejected(123);
+      },
+    };
+
+    const value5 = await wrapPromiseInStatusMonitor(
+      new Promise(resolve => {
+        setTimeout(() => resolve(obj5), 2);
+      }),
+    );
+
+    assert(value5 === obj5);
+
+    const obj6 = {
+      then: (onResolved: (val: unknown) => void) => {
+        onResolved(123);
+      },
+    };
+
+    const value6 = await wrapPromiseInStatusMonitor(
+      new Promise(resolve => {
+        setTimeout(() => resolve(obj6), 2);
+      }),
+    );
+
+    assert(value6 === 123);
+  });
+
+  it("Doesn't interpret non thenables in sync context", async () => {
+    const value1 = await PromiseResolve(null);
+
+    expect(value1).toBe(null);
+
+    const obj2 = {};
+    const value2 = await PromiseResolve(obj2);
+
+    assert(value2 === obj2);
+
+    const obj3 = { then: 'string' };
+    const value3 = await PromiseResolve(obj3);
+
+    assert(value3 === obj3);
+
+    const obj4 = { then: null };
+    const value4 = await PromiseResolve(obj4);
+
+    assert(value4 === obj4);
+
+    const obj5 = {
+      catch: (onRejected: (val: unknown) => void) => {
+        onRejected(123);
+      },
+    };
+
+    const value5 = await PromiseResolve(obj5);
+
+    assert(value5 === obj5);
+
+    const obj6 = {
+      then: (onResolved: (val: unknown) => void) => {
+        onResolved(123);
+      },
+    };
+
+    const value6 = await PromiseResolve(obj6);
+
+    assert(value6 === 123);
+  });
 });

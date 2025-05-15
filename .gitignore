@@ -10,3 +10,7 @@ scratchpad.ts
 stats.html
 temp.json
 tmp
+
+# stryker temp files
+.stryker-tmp
+reports

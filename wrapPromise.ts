@@ -1,4 +1,5 @@
 import { FLAG_ENUM, newAddedProperties, type FlagEnumKeys } from './consts.ts';
+import { isThenable } from './isPromise.ts';
 import type { Gen, Resolution } from './types.ts';
 
 export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
@@ -92,11 +93,6 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                 reject: (value: unknown) => void;
               }) =>
               () => {
-                assertSanity(
-                  `actOnSettled cannot act when parent is fucking pending!!!`,
-                  () => !is(parentChainLinkResolution, 'PENDING'),
-                );
-
                 const removeWarning = () => {
                   if (
                     !ifItIsErrorWasItSuppressed &&
@@ -200,11 +196,6 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
           //   // we will get cleanArgs.filter(...).length === 0
           //   const [onFinally] = promiseMethodCallArgArray;
           // }
-
-          assertSanity(
-            `How the fuck did you got here????`,
-            () => !!trackingPromise,
-          );
         },
       } satisfies ProxyHandler<Promise<unknown>[PromiseMethods]>);
     },
@@ -247,24 +238,6 @@ const getNewPendingResolution = () => ({
 
 type PromiseMethods = 'then' | 'catch' | 'finally';
 
-const isThenable = (t: unknown): t is PromiseLike<unknown> =>
-  typeof t === 'object' &&
-  t !== null &&
-  'then' in t &&
-  typeof t.then === 'function';
-
-export const isPromise = (t: unknown): t is Promise<unknown> =>
-  isThenable(t) &&
-  t.then.length === 2 &&
-  Symbol.toStringTag in t &&
-  t[Symbol.toStringTag] === 'Promise' &&
-  'catch' in t &&
-  typeof t.catch === 'function' &&
-  t.catch.length === 1 &&
-  'finally' in t &&
-  typeof t.finally === 'function' &&
-  t.finally.length === 1;
-
 const isValidPromiseMethodCallback = (t: unknown) => typeof t === 'function';
 
 const is = <
@@ -287,13 +260,3 @@ export const PromiseReject = <T>(value: T) =>
     status: FLAG_ENUM.REJECTED,
     value,
   });
-
-const assertSanity = (message: string, isSane: () => boolean) => {
-  if (isSane()) return;
-  const tmp = Error.stackTraceLimit;
-  Error.stackTraceLimit = 100;
-  const err = new Error(`Sanity check failed! ${message}`);
-  console.error(err, err.stack);
-  Error.stackTraceLimit = tmp;
-  throw err;
-};
