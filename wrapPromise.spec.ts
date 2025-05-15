@@ -141,7 +141,7 @@ describe('primitive tests', async () => {
   it('correctly handles delayed Promise which resolves', async () => {
     const promise = wrapPromiseInStatusMonitor(
       new Promise((resolve, _reject) => {
-        setTimeout(() => resolve('ok'), 10);
+        setTimeout(() => resolve('ok'), 2);
       }),
     );
 
@@ -171,7 +171,7 @@ describe('primitive tests', async () => {
   it('correctly handles delayed Promise which throws', async () => {
     const promise = wrapPromiseInStatusMonitor(
       new Promise((_resolve, reject) => {
-        setTimeout(() => reject('err message'), 10);
+        setTimeout(() => reject('err message'), 2);
       }),
     );
 
@@ -605,7 +605,7 @@ describe('specific rare branches', () => {
     const mock1 = vi.fn();
     const promise = wrapPromiseInStatusMonitor(
       new Promise((_resolve, reject) => {
-        setTimeout(() => reject('err message1'), 10);
+        setTimeout(() => reject('err message1'), 2);
       }),
     );
 
@@ -615,21 +615,21 @@ describe('specific rare branches', () => {
         err =>
           new Promise((_resolve, reject) => {
             mock1();
-            setTimeout(() => reject(err + '=> err message2'), 10);
+            setTimeout(() => reject(err + '=> err message2'), 2);
           }),
       )
       .catch(
         err =>
           new Promise((_resolve, reject) => {
             mock1();
-            setTimeout(() => reject(err + '=> err message3'), 10);
+            setTimeout(() => reject(err + '=> err message3'), 2);
           }),
       )
       .catch(
         err =>
           new Promise((_resolve, reject) => {
             mock1();
-            setTimeout(() => reject(err + '=> err message4'), 10);
+            setTimeout(() => reject(err + '=> err message4'), 2);
           }),
       )
       .then(
@@ -653,7 +653,7 @@ describe('specific rare branches', () => {
     const mock1 = vi.fn();
     const promise = wrapPromiseInStatusMonitor(
       new Promise((resolve, _reject) => {
-        setTimeout(() => resolve('ok message1'), 10);
+        setTimeout(() => resolve('ok message1'), 2);
       }),
     );
 
@@ -663,14 +663,14 @@ describe('specific rare branches', () => {
         ok =>
           new Promise((resolve, _reject) => {
             mock1();
-            setTimeout(() => resolve(ok + '=> ok message2'), 10);
+            setTimeout(() => resolve(ok + '=> ok message2'), 2);
           }),
       )
       .then(
         ok =>
           new Promise((_resolve, reject) => {
             mock1();
-            setTimeout(() => reject(ok + '=> err message3'), 10);
+            setTimeout(() => reject(ok + '=> err message3'), 2);
           }),
       )
       .then(
@@ -678,7 +678,7 @@ describe('specific rare branches', () => {
         err =>
           new Promise((_resolve, reject) => {
             mock1();
-            setTimeout(() => reject(err + '=> err message4'), 10);
+            setTimeout(() => reject(err + '=> err message4'), 2);
           }),
       )
       .then(
@@ -686,21 +686,21 @@ describe('specific rare branches', () => {
         err =>
           new Promise((_resolve, reject) => {
             mock1();
-            setTimeout(() => reject(err + '=> err message5'), 10);
+            setTimeout(() => reject(err + '=> err message5'), 2);
           }),
       )
       .catch(
         err =>
           new Promise((_resolve, reject) => {
             mock1();
-            setTimeout(() => reject(err + '=> err message6'), 10);
+            setTimeout(() => reject(err + '=> err message6'), 2);
           }),
       )
       .catch(
         err =>
           new Promise((_resolve, reject) => {
             mock1();
-            setTimeout(() => reject(err + '=> err message7'), 10);
+            setTimeout(() => reject(err + '=> err message7'), 2);
           }),
       )
       .then(
@@ -708,7 +708,7 @@ describe('specific rare branches', () => {
         err =>
           new Promise((resolve, _reject) => {
             mock1();
-            setTimeout(() => resolve(err + '=> ok message8'), 10);
+            setTimeout(() => resolve(err + '=> ok message8'), 2);
           }),
       )
       .then(
@@ -738,7 +738,7 @@ describe('specific rare branches', () => {
         v =>
           new Promise((_resolve, reject) => {
             mock1();
-            setTimeout(() => reject(v + 'val'), 10);
+            setTimeout(() => reject(v + 'val'), 2);
           }),
       )
       .catch(e => e + 's');
