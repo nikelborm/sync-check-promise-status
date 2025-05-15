@@ -1,7 +1,7 @@
 import type { FLAG_ENUM } from './consts.ts';
 
 export type Gen<Context = undefined, Result = never> = Promise<Result> & {
-  ctx: Context;
+  ctx?: Context | undefined;
 } & (
     | {
         status: 'pending';

@@ -6,7 +6,7 @@ import {
 
 export default defineConfig({
   test: {
-    exclude: [...defaultExclude, 'tmp/**'],
+    exclude: [...defaultExclude, 'tmp/**', 'gh-page/**'],
     coverage: {
       enabled: true,
       provider: 'v8',

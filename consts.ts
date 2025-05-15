@@ -6,3 +6,15 @@ export const FLAG_ENUM = {
 
 export type FlagEnumKeys = keyof typeof FLAG_ENUM;
 export type FlagEnumValues = (typeof FLAG_ENUM)[FlagEnumKeys];
+
+export const newAddedProperties = new Set([
+  'isFulfilled',
+  'isPending',
+  'isRejected',
+  'isSettled',
+
+  'result',
+  'status',
+  'ctx',
+  'error',
+]);

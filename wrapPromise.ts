@@ -1,4 +1,4 @@
-import { FLAG_ENUM, type FlagEnumKeys } from './consts.ts';
+import { FLAG_ENUM, newAddedProperties, type FlagEnumKeys } from './consts.ts';
 import type { Gen, Resolution } from './types.ts';
 
 export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
@@ -19,7 +19,13 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
         })()
       : null;
 
+  let ifItIsErrorWasItSuppressed = false;
+
   const promiseHandlers = {
+    has(target, p) {
+      if ((newAddedProperties as Set<unknown>).has(p)) return true;
+      return Reflect.has(target, p);
+    },
     get(targetPromise, accessedPromiseKey, receiverProxy) {
       if (accessedPromiseKey === 'isPending')
         return is(parentChainLinkResolution, 'PENDING');
@@ -33,12 +39,14 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
       if (accessedPromiseKey === 'isRejected')
         return is(parentChainLinkResolution, 'REJECTED');
 
-      if (accessedPromiseKey === 'status')
-        return is(parentChainLinkResolution, 'FULFILLED')
+      const getCurrentTextStatus = () =>
+        is(parentChainLinkResolution, 'FULFILLED')
           ? 'fulfilled'
           : is(parentChainLinkResolution, 'REJECTED')
             ? 'rejected'
             : 'pending';
+
+      if (accessedPromiseKey === 'status') return getCurrentTextStatus();
 
       if (accessedPromiseKey === 'error' || accessedPromiseKey === 'result') {
         if (is(parentChainLinkResolution, 'PENDING'))
@@ -48,7 +56,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
           is(parentChainLinkResolution, 'FULFILLED')
         )
           throw new Error(
-            `Can't get ${accessedPromiseKey} of rejected promise. Did you mean to access .${accessedPromiseKey === 'error' ? 'result' : 'error'}?`,
+            `Can't get ${accessedPromiseKey} of ${getCurrentTextStatus()} promise. Did you mean to access .${accessedPromiseKey === 'error' ? 'result' : 'error'}?`,
           );
         else return parentChainLinkResolution.value;
       }
@@ -76,7 +84,9 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
           promiseMethodCallArgArray,
         ) {
           // const cleanArgs = promiseMethodCallArgArray.slice(
+
           //   0,
+
           //   accessedPromiseKey === 'then' ? 2 : 1,
           // );
 
@@ -96,6 +106,21 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                 reject: (value: unknown) => void;
               }) =>
               () => {
+                assertSanity(
+                  `actOnSettled cannot act when parent is fucking pending!!!`,
+                  () => !is(parentChainLinkResolution, 'PENDING'),
+                );
+
+                const removeWarning = () => {
+                  if (
+                    !ifItIsErrorWasItSuppressed &&
+                    is(parentChainLinkResolution, 'REJECTED')
+                  ) {
+                    promise.then(void 0, () => {});
+                    ifItIsErrorWasItSuppressed = true;
+                  }
+                };
+
                 const appropriatePromiseMethodCallback =
                   buildAppropriateCallback();
 
@@ -112,6 +137,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                   if (!asyncContext) return receiverProxy;
 
                   if (is(parentChainLinkResolution, 'FULFILLED')) {
+                    // removeWarning();
                     asyncContext.fulfill(parentChainLinkResolution.value);
                     return parentChainLinkResolution.value;
                   }
@@ -125,19 +151,27 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                     parentChainLinkResolution.value,
                   );
 
-                  // TODO: experimentally test removing those wrappers for performance reasons
                   if (asyncContext) {
                     if (isThenable(childChainLinkResult)) {
                       return childChainLinkResult.then(
-                        asyncContext.fulfill,
-                        asyncContext.reject,
+                        result => {
+                          removeWarning();
+                          asyncContext.fulfill(result);
+                          return result;
+                        },
+                        reject => {
+                          asyncContext.reject(reject);
+                          throw reject;
+                        },
                       );
-                    } else {
-                      asyncContext.fulfill(childChainLinkResult);
-                      return childChainLinkResult;
                     }
+
+                    removeWarning();
+                    asyncContext.fulfill(childChainLinkResult);
+                    return childChainLinkResult;
                   }
 
+                  removeWarning();
                   return isThenable(childChainLinkResult)
                     ? wrapPromiseInStatusMonitor(childChainLinkResult)
                     : PromiseResolve(childChainLinkResult);
@@ -146,6 +180,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                     asyncContext.reject(error);
                     throw error;
                   }
+                  removeWarning();
                   return PromiseReject(error);
                 }
               };
@@ -155,8 +190,13 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
 
             let localResolutionOfNextChainStep = getNewPendingResolution();
 
+            assertSanity(
+              `can't call trackingPromise.then because it's null???`,
+              () => !!trackingPromise,
+            );
+
             return wrapPromiseInStatusMonitor(
-              trackingPromise.then(
+              trackingPromise!.then(
                 actOnSettled(
                   getResolutionSetters<unknown>(localResolutionOfNextChainStep),
                 ),
@@ -206,10 +246,10 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
             // we will get cleanArgs.filter(...).length === 0
             const [onFinally] = promiseMethodCallArgArray;
           }
-          return Reflect.apply(
-            targetPromiseMethod.bind(targetPromise),
-            thisOfPromiseMethod,
-            promiseMethodCallArgArray,
+
+          assertSanity(
+            `How the fuck did you got here????`,
+            () => !!trackingPromise,
           );
         },
       } satisfies ProxyHandler<Promise<unknown>[PromiseMethods]>);
@@ -289,14 +329,24 @@ const is = <
 ): resolution is ExtractSpecificResolutions<TResolution, FlagEnumKey> =>
   resolution.status === FLAG_ENUM[statusToCheckFor];
 
-const PromiseResolve = <T>(value: T) =>
+export const PromiseResolve = <T>(value: T) =>
   wrapPromiseInStatusMonitor(Promise.resolve(value) as Promise<T>, undefined, {
     status: FLAG_ENUM.FULFILLED,
     value,
   });
 
-const PromiseReject = <T>(value: T) =>
+export const PromiseReject = <T>(value: T) =>
   wrapPromiseInStatusMonitor(Promise.reject(value), undefined, {
     status: FLAG_ENUM.REJECTED,
     value,
   });
+
+const assertSanity = (message: string, isSane: () => boolean) => {
+  if (isSane()) return;
+  const tmp = Error.stackTraceLimit;
+  Error.stackTraceLimit = 100;
+  const err = new Error(`Sanity check failed! ${message}`);
+  console.error(err, err.stack);
+  Error.stackTraceLimit = tmp;
+  throw err;
+};
