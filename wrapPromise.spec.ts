@@ -21,6 +21,7 @@ describe('primitive tests', async () => {
       `[Error: Can't get error of fulfilled promise. Did you mean to access .result?]`,
     );
     expect(promise).toHaveProperty('result', 'ok');
+    assert(!('error' in promise));
 
     const result = await promise;
 
@@ -50,6 +51,7 @@ describe('primitive tests', async () => {
       `[Error: Can't get result of rejected promise. Did you mean to access .error?]`,
     );
     expect(promise).toHaveProperty('error', 'err message');
+    assert(!('result' in promise));
 
     let thrown = false;
 
@@ -87,6 +89,8 @@ describe('primitive tests', async () => {
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get error of pending promise]`,
     );
+    assert(!('error' in promise));
+    assert(!('result' in promise));
 
     const result = await promise;
 
@@ -99,6 +103,9 @@ describe('primitive tests', async () => {
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get error of fulfilled promise. Did you mean to access .result?]`,
     );
+
+    assert('result' in promise);
+    assert(!('error' in promise));
   });
 
   it("correctly handles Promise.reject('err')", async () => {
@@ -119,6 +126,9 @@ describe('primitive tests', async () => {
       `[Error: Can't get error of pending promise]`,
     );
 
+    assert(!('error' in promise));
+    assert(!('result' in promise));
+
     let thrown = false;
 
     try {
@@ -136,6 +146,9 @@ describe('primitive tests', async () => {
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get result of rejected promise. Did you mean to access .error?]`,
     );
+
+    assert('error' in promise);
+    assert(!('result' in promise));
   });
 
   it('correctly handles delayed Promise which resolves', async () => {
@@ -850,5 +863,37 @@ describe('specific rare branches', () => {
     const value6 = await PromiseResolve(obj6);
 
     assert(value6 === 123);
+  });
+
+  it('correctly shows context', () => {
+    const promise = PromiseResolve(123, { context: 'cool' });
+    expect(promise.ctx).toStrictEqual({ context: 'cool' });
+
+    const promise2 = PromiseResolve(123, null);
+    expect(promise2.ctx).toStrictEqual(null);
+
+    const promise3 = PromiseResolve(123, false);
+    expect(promise3.ctx).toStrictEqual(false);
+  });
+
+  it('correctly handles `in` keyword ', () => {
+    const promise = PromiseResolve(123, { context: 'cool' });
+    expect(promise).not.toHaveProperty('context');
+    expect(promise).not.toHaveProperty('sadf');
+    assert(Symbol.toStringTag in promise);
+  });
+
+  it('correctly handles values of PromiseResolve and PromiseReject', () => {
+    const promise = PromiseResolve(123, { context: 'cool' });
+    if (promise.status === 'fulfilled') {
+      expect(promise.result).toEqual(123);
+    } else
+      assert(false, 'promise.status of PromiseResolve should be fulfilled');
+
+    const promise2 = PromiseReject(123, { context: 'cool' });
+    if (promise2.status === 'rejected') {
+      expect(promise2.error).toEqual(123);
+      promise2.catch(() => {});
+    } else assert(false, 'promise.status of PromiseReject should be rejected');
   });
 });

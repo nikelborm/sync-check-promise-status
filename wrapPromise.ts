@@ -1,4 +1,8 @@
-import { FLAG_ENUM, newAddedProperties, type FlagEnumKeys } from './consts.ts';
+import {
+  FLAG_ENUM,
+  newAlwaysPresentProperties,
+  type FlagEnumKeys,
+} from './consts.ts';
 import { isThenable } from './isPromise.ts';
 import type { Gen, Resolution } from './types.ts';
 
@@ -23,9 +27,12 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
   let ifItIsErrorWasItSuppressed = false;
 
   const promiseHandlers = {
-    has(target, p) {
-      if ((newAddedProperties as Set<unknown>).has(p)) return true;
-      return Reflect.has(target, p);
+    has(target, key) {
+      if (key === 'error') return is(parentChainLinkResolution, 'REJECTED');
+      if (key === 'result') return is(parentChainLinkResolution, 'FULFILLED');
+
+      if ((newAlwaysPresentProperties as Set<unknown>).has(key)) return true;
+      return Reflect.has(target, key);
     },
     get(targetPromise, accessedPromiseKey, receiverProxy) {
       if (accessedPromiseKey === 'isPending')
@@ -249,14 +256,14 @@ const is = <
 ): resolution is ExtractSpecificResolutions<TResolution, FlagEnumKey> =>
   resolution.status === FLAG_ENUM[statusToCheckFor];
 
-export const PromiseResolve = <T>(value: T) =>
-  wrapPromiseInStatusMonitor(Promise.resolve(value) as Promise<T>, undefined, {
+export const PromiseResolve = <T, Context>(value: T, context?: Context) =>
+  wrapPromiseInStatusMonitor(Promise.resolve(value) as Promise<T>, context, {
     status: FLAG_ENUM.FULFILLED,
     value,
   });
 
-export const PromiseReject = <T>(value: T) =>
-  wrapPromiseInStatusMonitor(Promise.reject(value), undefined, {
+export const PromiseReject = <T, Context>(value: T, context?: Context) =>
+  wrapPromiseInStatusMonitor(Promise.reject(value), context, {
     status: FLAG_ENUM.REJECTED,
     value,
   });
