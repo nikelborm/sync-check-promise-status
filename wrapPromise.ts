@@ -187,9 +187,23 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                 }
 
                 try {
+                  const isItActualInCallbackContext =
+                    appropriatePromiseMethodCallback.toString() ===
+                    'function () { [native code] }';
+
+                  console.log('my proxy 2', {
+                    // childChainLinkResult,
+                    parentChainLinkResolution,
+                    parentChainLinkResolutionValue:
+                      parentChainLinkResolution.value,
+                    Callbacktostr: appropriatePromiseMethodCallback.toString(),
+                  });
+
                   const childChainLinkResult = appropriatePromiseMethodCallback(
                     parentChainLinkResolution.value,
                   );
+
+                  if (isItActualInCallbackContext) return;
 
                   // TODO: also check for it returning WrappedPromise with isWrappedPromise, to not add redundant status handlers
 
@@ -214,10 +228,22 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                     return fulfill(childChainLinkResult);
                   }
 
+                  console.log('my proxy 2', {
+                    childChainLinkResult,
+                    parentChainLinkResolution,
+                    parentChainLinkResolutionValue:
+                      parentChainLinkResolution.value,
+                    Callbacktostr: appropriatePromiseMethodCallback.toString(),
+                  });
+
                   removeWarning();
                   return isThenable(childChainLinkResult)
-                    ? wrapPromiseInStatusMonitor(childChainLinkResult)
-                    : PromiseResolve(childChainLinkResult);
+                    ? (() => {
+                        return wrapPromiseInStatusMonitor(childChainLinkResult);
+                      })()
+                    : isItActualInCallbackContext
+                      ? void 0
+                      : PromiseResolve(childChainLinkResult);
                 } catch (error) {
                   if (asyncContext) reject(error);
                   removeWarning();
@@ -225,8 +251,11 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                 }
               };
 
-            if (!is(parentChainLinkResolution, 'PENDING'))
-              return actOnSettled()();
+            if (!is(parentChainLinkResolution, 'PENDING')) {
+              const asd = actOnSettled()();
+
+              return asd;
+            }
 
             let localResolutionOfNextChainStep =
               getNewPendingResolution() as Resolution<unknown>;
@@ -291,11 +320,13 @@ const getResolutionSetters = <Result = never>(
 ) => {
   const setResolution =
     <const FlagEnumKey extends FlagEnumKeys>(
-      status: FlagEnumKey,
+      status: Exclude<FlagEnumKey, 'PENDING'>,
     ): ResolutionSetter<FlagEnumKey, Result> =>
     value => {
-      resolution.status = FLAG_ENUM[status];
-      resolution.value = value;
+      if (resolution.status === FLAG_ENUM.PENDING) {
+        resolution.status = FLAG_ENUM[status];
+        resolution.value = value;
+      }
     };
 
   const fulfill = setResolution('FULFILLED');
