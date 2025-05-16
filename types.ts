@@ -1,8 +1,8 @@
-import type { FLAG_ENUM } from './consts.ts';
+import type { FULFILLED, PENDING, REJECTED } from './consts.ts';
 
 export type Gen<Context = undefined, Result = never> = Promise<Result> & {
   ctx?: Context | undefined;
-} & (
+} & Readonly<
     | {
         status: 'pending';
         isPending: true;
@@ -26,9 +26,9 @@ export type Gen<Context = undefined, Result = never> = Promise<Result> & {
         isRejected: true;
         error: unknown;
       }
-  );
+  >;
 
 export type Resolution<Result = never> =
-  | { status: typeof FLAG_ENUM.PENDING; value: undefined }
-  | { status: typeof FLAG_ENUM.FULFILLED; value: Result }
-  | { status: typeof FLAG_ENUM.REJECTED; value: unknown };
+  | { status: PENDING; value: undefined }
+  | { status: FULFILLED; value: Result }
+  | { status: REJECTED; value: unknown };

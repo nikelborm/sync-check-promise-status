@@ -1,12 +1,15 @@
 import {
-  FLAG_ENUM,
+  FULFILLED,
   newAlwaysPresentProperties,
-  type FlagEnumKeys,
+  PENDING,
+  REJECTED,
+  type FlagEnumValues,
+  type SETTLED,
 } from './consts.ts';
 import { isThenable } from './isThenable.ts';
 import type { Gen, Resolution } from './types.ts';
 
-const WrappedPromiseSymbol = Symbol('WrappedPromiseSymbol');
+// const WrappedPromiseSymbol = Symbol('WrappedPromiseSymbol');
 
 // const isWrappedPromise = <Context = unknown, Result = never>(
 //   promise: PromiseLike<Result>,
@@ -24,7 +27,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
     externallyManagedResolution ?? getNewPendingResolution();
 
   const trackingPromise =
-    is(parentChainLinkResolution, 'PENDING') && !externallyManagedResolution
+    is(parentChainLinkResolution, PENDING) && !externallyManagedResolution
       ? (() => {
           const { fulfill, reject } = getResolutionSetters<Result>(
             parentChainLinkResolution,
@@ -33,6 +36,13 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
         })()
       : null;
 
+  const getCurrentTextStatus = () =>
+    is(parentChainLinkResolution, FULFILLED)
+      ? 'fulfilled'
+      : is(parentChainLinkResolution, REJECTED)
+        ? 'rejected'
+        : 'pending';
+
   // const prototype = {};
 
   let ifItIsErrorWasItSuppressed = false;
@@ -40,8 +50,8 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
   const promiseHandlers = {
     // getOwnPropertyDescriptor(target, key) {
     //   if (
-    //     (key === 'error' && is(parentChainLinkResolution, 'REJECTED')) ||
-    //     (key === 'result' && is(parentChainLinkResolution, 'FULFILLED'))
+    //     (key === 'error' && is(parentChainLinkResolution, REJECTED)) ||
+    //     (key === 'result' && is(parentChainLinkResolution, FULFILLED))
     //   )
     //     return {
     //       value: parentChainLinkResolution.value,
@@ -69,8 +79,8 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
     // },
 
     has(target, key) {
-      if (key === 'error') return is(parentChainLinkResolution, 'REJECTED');
-      if (key === 'result') return is(parentChainLinkResolution, 'FULFILLED');
+      if (key === 'error') return is(parentChainLinkResolution, REJECTED);
+      if (key === 'result') return is(parentChainLinkResolution, FULFILLED);
       // if (key === WrappedPromiseSymbol) {
       //   return true;
       // }
@@ -81,32 +91,26 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
     },
     get(targetPromise, accessedPromiseKey, receiverProxy) {
       if (accessedPromiseKey === 'isPending')
-        return is(parentChainLinkResolution, 'PENDING');
+        return is(parentChainLinkResolution, PENDING);
 
       if (accessedPromiseKey === 'isSettled')
-        return !is(parentChainLinkResolution, 'PENDING');
+        return !is(parentChainLinkResolution, PENDING);
 
       if (accessedPromiseKey === 'isFulfilled')
-        return is(parentChainLinkResolution, 'FULFILLED');
+        return is(parentChainLinkResolution, FULFILLED);
 
       if (accessedPromiseKey === 'isRejected')
-        return is(parentChainLinkResolution, 'REJECTED');
-
-      const getCurrentTextStatus = () =>
-        is(parentChainLinkResolution, 'FULFILLED')
-          ? 'fulfilled'
-          : is(parentChainLinkResolution, 'REJECTED')
-            ? 'rejected'
-            : 'pending';
+        return is(parentChainLinkResolution, REJECTED);
 
       if (accessedPromiseKey === 'status') return getCurrentTextStatus();
 
       if (accessedPromiseKey === 'error' || accessedPromiseKey === 'result') {
-        if (is(parentChainLinkResolution, 'PENDING'))
+        if (is(parentChainLinkResolution, PENDING)) {
+          parentChainLinkResolution;
           throw new Error(`Can't get ${accessedPromiseKey} of pending promise`);
-        else if (
+        } else if (
           (accessedPromiseKey === 'error') ===
-          is(parentChainLinkResolution, 'FULFILLED')
+          is(parentChainLinkResolution, FULFILLED)
         )
           throw new Error(
             `Can't get ${accessedPromiseKey} of ${getCurrentTextStatus()} promise. Did you mean to access .${accessedPromiseKey === 'error' ? 'result' : 'error'}?`,
@@ -149,7 +153,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                 const removeWarning = () => {
                   if (
                     !ifItIsErrorWasItSuppressed &&
-                    is(parentChainLinkResolution, 'REJECTED')
+                    is(parentChainLinkResolution, REJECTED)
                   ) {
                     promise.then(void 0, () => {});
                     ifItIsErrorWasItSuppressed = true;
@@ -181,7 +185,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                 ) {
                   if (!asyncContext) return receiverProxy;
 
-                  if (is(parentChainLinkResolution, 'FULFILLED'))
+                  if (is(parentChainLinkResolution, FULFILLED))
                     return fulfill(parentChainLinkResolution.value);
                   reject(parentChainLinkResolution.value);
                 }
@@ -211,10 +215,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                     if (isThenable(childChainLinkResult)) {
                       const t = childChainLinkResult.then(fulfill, reject);
                       if (
-                        is(
-                          asyncContext.localResolutionOfNextChainStep,
-                          'PENDING',
-                        )
+                        is(asyncContext.localResolutionOfNextChainStep, PENDING)
                       ) {
                         // plan as promise
                         // ??????????????????????!!!!!!!!!!!!!!!!
@@ -251,7 +252,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                 }
               };
 
-            if (!is(parentChainLinkResolution, 'PENDING')) {
+            if (!is(parentChainLinkResolution, PENDING)) {
               const asd = actOnSettled()();
 
               return asd;
@@ -275,7 +276,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
 
           if (accessedPromiseKey === 'catch') {
             return buildReturnValue(() =>
-              is(parentChainLinkResolution, 'REJECTED')
+              is(parentChainLinkResolution, REJECTED)
                 ? promiseMethodCallArgArray[0]
                 : null,
             );
@@ -285,7 +286,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
             return buildReturnValue(
               () =>
                 promiseMethodCallArgArray[
-                  +is(parentChainLinkResolution, 'REJECTED')
+                  +is(parentChainLinkResolution, REJECTED)
                 ],
             );
           }
@@ -308,35 +309,37 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
 
 type ExtractSpecificResolutions<
   TResolution extends Resolution<any>,
-  FlagEnumKey extends FlagEnumKeys,
-> = Extract<TResolution, { status: (typeof FLAG_ENUM)[FlagEnumKey] }>;
+  FlagEnumValue extends FlagEnumValues,
+> = Extract<TResolution, { status: FlagEnumValue }>;
 
-type ResolutionSetter<FlagEnumKey extends FlagEnumKeys, Result = never> = (
-  value: ExtractSpecificResolutions<Resolution<Result>, FlagEnumKey>['value'],
+type ResolutionSetter<FlagEnumValue extends FlagEnumValues, Result = never> = (
+  value: ExtractSpecificResolutions<Resolution<Result>, FlagEnumValue>['value'],
 ) => void;
 
 const getResolutionSetters = <Result = never>(
   resolution: Resolution<Result>,
 ) => {
   const setResolution =
-    <const FlagEnumKey extends FlagEnumKeys>(
-      status: Exclude<FlagEnumKey, 'PENDING'>,
-    ): ResolutionSetter<FlagEnumKey, Result> =>
+    <const FlagEnumValue extends FlagEnumValues>(
+      status: SETTLED,
+    ): ResolutionSetter<FlagEnumValue, Result> =>
     value => {
-      if (resolution.status === FLAG_ENUM.PENDING) {
-        resolution.status = FLAG_ENUM[status];
-        resolution.value = value;
+      if (resolution.status === PENDING) {
+        // // @ts-ignore
+        // resolution.status = status;
+        // // @ts-ignore
+        // resolution.value = value;
       }
     };
 
-  const fulfill = setResolution('FULFILLED');
-  const reject = setResolution('REJECTED');
+  const fulfill = setResolution(FULFILLED);
+  const reject = setResolution(REJECTED);
 
   return { fulfill, reject };
 };
 
 const getNewPendingResolution = () => ({
-  status: FLAG_ENUM.PENDING,
+  status: PENDING,
   value: undefined,
 });
 
@@ -344,23 +347,22 @@ type PromiseMethods = 'then' | 'catch' | 'finally';
 
 const isValidPromiseMethodCallback = (t: unknown) => typeof t === 'function';
 
-const is = <
-  const FlagEnumKey extends FlagEnumKeys,
-  TResolution extends Resolution<any>,
->(
-  resolution: TResolution,
-  statusToCheckFor: FlagEnumKey,
-): resolution is ExtractSpecificResolutions<TResolution, FlagEnumKey> =>
-  resolution.status === FLAG_ENUM[statusToCheckFor];
+const is = <const FlagEnumValue extends FlagEnumValues, Result = never>(
+  resolution: Resolution<Result>,
+  statusToCheckFor: FlagEnumValue,
+): resolution is ExtractSpecificResolutions<
+  Resolution<Result>,
+  FlagEnumValue
+> => resolution.status === statusToCheckFor;
 
 export const PromiseResolve = <T, Context>(value: T, context?: Context) =>
   wrapPromiseInStatusMonitor(Promise.resolve(value) as Promise<T>, context, {
-    status: FLAG_ENUM.FULFILLED,
+    status: FULFILLED,
     value,
   });
 
 export const PromiseReject = <T, Context>(value: T, context?: Context) =>
   wrapPromiseInStatusMonitor(Promise.reject(value), context, {
-    status: FLAG_ENUM.REJECTED,
+    status: REJECTED,
     value,
   });
