@@ -6,10 +6,13 @@
   "license": "MIT",
   "scripts": {
     "scratchpad": "node --use-strict --watch --trace-uncaught --disable-warning=ExperimentalWarning ./scratchpad.ts",
+    "scratchpad2": "node --use-strict --watch --trace-uncaught --disable-warning=ExperimentalWarning ./scratchpad2.ts",
+    "scratchpad3": "node --use-strict --watch --trace-uncaught --disable-warning=ExperimentalWarning ./scratchpad3.ts",
     "test": "vitest --watch",
     "format": "prettier . --write",
     "coverage": "vitest run --coverage",
     "test-once": "vitest --run",
+    "test:mutate": "stryker run",
     "test-jsr": "tsc && jsr publish --dry-run",
     "build": "./scripts/build.sh",
     "doc": "./scripts/generate_docs.sh",

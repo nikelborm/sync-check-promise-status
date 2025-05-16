@@ -4,6 +4,7 @@ import {
   PromiseResolve,
   wrapPromiseInStatusMonitor,
 } from './wrapPromise.ts';
+import { isThenable } from './isThenable.ts';
 
 describe('primitive tests', async () => {
   it('Correctly handles custom PromiseResolve', async () => {
@@ -902,9 +903,85 @@ describe('specific rare branches', () => {
       Promise.resolve(123)[Symbol.toStringTag] ===
         PromiseResolve(123)[Symbol.toStringTag],
     );
-    assert(
-      Promise.reject(123)[Symbol.toStringTag] ===
-        PromiseReject(123)[Symbol.toStringTag],
+    const [a, b] = [Promise.reject(123), PromiseReject(123)];
+    assert(a[Symbol.toStringTag] === b[Symbol.toStringTag]);
+
+    a.catch(() => {});
+    b.catch(() => {});
+  });
+
+  it("doesn't automatically call `.then(...)` to track promises when externally managed", () => {
+    const mock = vi.fn();
+
+    const promise = PromiseResolve('hello');
+  });
+
+  it('throws when called with finally', () => {
+    expect(() =>
+      PromiseResolve('hello').finally(() => {}),
+    ).toThrowErrorMatchingInlineSnapshot(`[Error: finally is not supported]`);
+  });
+
+  it('branch4', async () => {
+    // [Survived] BlockStatement
+    // wrapPromise.ts:193:37
+    // -                     if (asyncContext) {
+    // -                       if (isThenable(childChainLinkResult)) {
+    // -                         // TODO: why the fuck removal of this .then shit doesn't change anything
+    // -                         return childChainLinkResult.then(fulfill, reject);
+    // -                       }
+    // -                       return fulfill(childChainLinkResult);
+    // -                     }
+    // +                     if (asyncContext) {}
+    const promise = wrapPromiseInStatusMonitor(
+      new Promise(resolve => {
+        setTimeout(
+          () =>
+            resolve({
+              then(_, onRejected: (v: unknown) => void) {
+                onRejected('right');
+              },
+            }),
+          2,
+        );
+      }),
+    ).catch(e => {
+      throw e;
+    });
+
+    const promise2 = promise.then(
+      undefined,
+      e =>
+        new Promise(resolve => {
+          setTimeout(
+            () =>
+              resolve({
+                then(onFulfill: (v: unknown) => void) {
+                  onFulfill('2' + e);
+                },
+              }),
+            2,
+          );
+        }),
     );
+
+    expect(await promise2).toBe('2right');
+    expect(promise2.result).toBe('2right');
+    expect(promise.error).toBe('right');
+  });
+});
+
+describe('isThenable', () => {
+  it('returns correct answers', () => {
+    expect(isThenable(123)).toBe(false);
+    expect(isThenable('123')).toBe(false);
+    expect(isThenable(undefined)).toBe(false);
+    expect(isThenable({ then() {} })).toBe(true);
+    expect(isThenable({ then: {} })).toBe(false);
+    expect(isThenable({ then: null })).toBe(false);
+    expect(isThenable({ then: 'null' })).toBe(false);
+    expect(isThenable({ then: () => {} })).toBe(true);
+    expect(isThenable(PromiseResolve(123))).toBe(true);
+    expect(isThenable(Promise.resolve(123))).toBe(true);
   });
 });

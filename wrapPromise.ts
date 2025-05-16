@@ -3,14 +3,23 @@ import {
   newAlwaysPresentProperties,
   type FlagEnumKeys,
 } from './consts.ts';
-import { isThenable } from './isPromise.ts';
+import { isThenable } from './isThenable.ts';
 import type { Gen, Resolution } from './types.ts';
+
+const WrappedPromiseSymbol = Symbol('WrappedPromiseSymbol');
+
+// const isWrappedPromise = <Context = unknown, Result = never>(
+//   promise: PromiseLike<Result>,
+// ): promise is Gen<Context, Result> => WrappedPromiseSymbol in promise;
 
 export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
   promise: PromiseLike<Result>,
   ctx?: Context,
   externallyManagedResolution?: Resolution<NoInfer<Result>>,
 ) => {
+  // if (isThenable(promise) && externallyManagedResolution) {
+  // }
+
   let parentChainLinkResolution: Resolution<Result> =
     externallyManagedResolution ?? getNewPendingResolution();
 
@@ -24,14 +33,48 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
         })()
       : null;
 
+  // const prototype = {};
+
   let ifItIsErrorWasItSuppressed = false;
 
   const promiseHandlers = {
+    // getOwnPropertyDescriptor(target, key) {
+    //   if (
+    //     (key === 'error' && is(parentChainLinkResolution, 'REJECTED')) ||
+    //     (key === 'result' && is(parentChainLinkResolution, 'FULFILLED'))
+    //   )
+    //     return {
+    //       value: parentChainLinkResolution.value,
+    //       configurable: false,
+    //       enumerable: true,
+    //       writable: false,
+    //     };
+
+    //   if (key === 'isFulfilled')
+    //     return Reflect.getOwnPropertyDescriptor(target, key);
+    //   if (key === 'isPending')
+    //     return Reflect.getOwnPropertyDescriptor(target, key);
+    //   if (key === 'isRejected')
+    //     return Reflect.getOwnPropertyDescriptor(target, key);
+    //   if (key === 'isSettled')
+    //     return Reflect.getOwnPropertyDescriptor(target, key);
+    //   if (key === 'status')
+    //     return Reflect.getOwnPropertyDescriptor(target, key);
+    //   if (key === 'ctx') return Reflect.getOwnPropertyDescriptor(target, key);
+    //   return Reflect.getOwnPropertyDescriptor(target, key);
+    // },
+
+    // getPrototypeOf(target) {
+    //   return {};
+    // },
+
     has(target, key) {
       if (key === 'error') return is(parentChainLinkResolution, 'REJECTED');
       if (key === 'result') return is(parentChainLinkResolution, 'FULFILLED');
+      if (key === WrappedPromiseSymbol) return true;
 
       if ((newAlwaysPresentProperties as Set<unknown>).has(key)) return true;
+
       return Reflect.has(target, key);
     },
     get(targetPromise, accessedPromiseKey, receiverProxy) {
@@ -145,6 +188,8 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                     parentChainLinkResolution.value,
                   );
 
+                  // TODO: also check for it returning WrappedPromise with isWrappedPromise, to not add redundant status handlers
+
                   if (asyncContext) {
                     if (isThenable(childChainLinkResult)) {
                       // TODO: why the fuck removal of this .then shit doesn't change anything
@@ -196,6 +241,8 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                 ],
             );
           }
+
+          throw new Error('finally is not supported');
 
           // if (accessedPromiseKey === 'finally') {
           //   // onFinally is guaranteed to be valid by areAllMethodArgsGarbage,

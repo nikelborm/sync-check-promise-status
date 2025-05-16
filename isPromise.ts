@@ -1,8 +1,4 @@
-export const isThenable = (t: unknown): t is PromiseLike<unknown> =>
-  typeof t === 'object' &&
-  t !== null &&
-  'then' in t &&
-  typeof t.then === 'function';
+import { isThenable } from './isThenable.ts';
 
 export const isPromise = (t: unknown): t is Promise<unknown> =>
   isThenable(t) &&

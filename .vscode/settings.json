@@ -16,5 +16,6 @@
   "typescript.preferences.importModuleSpecifier": "project-relative",
   "typescript.preferences.importModuleSpecifierEnding": "js",
   "javascript.preferences.importModuleSpecifierEnding": "js",
+  "barreler.extensions": "same-as-file",
   "typescript.preferences.preferTypeOnlyAutoImports": true
 }
