@@ -12,7 +12,6 @@ export const newAlwaysPresentProperties = new Set([
   'isPending',
   'isRejected',
   'isSettled',
-
   'status',
   'ctx',
 ]);

@@ -6,7 +6,10 @@ import {
 
 export default defineConfig({
   test: {
-    exclude: [...defaultExclude, 'tmp/**', 'gh-page/**', '.stryker-tmp/**'],
+    exclude: [
+      ...defaultExclude,
+      '**/{tmp,gh-page,.stryker-tmp,.github,.vscode,reports,scripts}/**',
+    ],
     coverage: {
       enabled: true,
       provider: 'v8',

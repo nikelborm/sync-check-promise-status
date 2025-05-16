@@ -71,7 +71,9 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
     has(target, key) {
       if (key === 'error') return is(parentChainLinkResolution, 'REJECTED');
       if (key === 'result') return is(parentChainLinkResolution, 'FULFILLED');
-      if (key === WrappedPromiseSymbol) return true;
+      // if (key === WrappedPromiseSymbol) {
+      //   return true;
+      // }
 
       if ((newAlwaysPresentProperties as Set<unknown>).has(key)) return true;
 
@@ -139,6 +141,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
           ) => {
             const actOnSettled =
               (asyncContext?: {
+                localResolutionOfNextChainStep: Resolution<unknown>;
                 fulfill: (value: unknown) => void;
                 reject: (value: unknown) => void;
               }) =>
@@ -192,8 +195,20 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
 
                   if (asyncContext) {
                     if (isThenable(childChainLinkResult)) {
-                      // TODO: why the fuck removal of this .then shit doesn't change anything
-                      return childChainLinkResult.then(fulfill, reject);
+                      const t = childChainLinkResult.then(fulfill, reject);
+                      if (
+                        is(
+                          asyncContext.localResolutionOfNextChainStep,
+                          'PENDING',
+                        )
+                      ) {
+                        // plan as promise
+                        // ??????????????????????!!!!!!!!!!!!!!!!
+                        return t;
+                      }
+
+                      removeWarning();
+                      return asyncContext.localResolutionOfNextChainStep.value;
                     }
 
                     return fulfill(childChainLinkResult);
@@ -213,13 +228,17 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
             if (!is(parentChainLinkResolution, 'PENDING'))
               return actOnSettled()();
 
-            let localResolutionOfNextChainStep = getNewPendingResolution();
+            let localResolutionOfNextChainStep =
+              getNewPendingResolution() as Resolution<unknown>;
 
             return wrapPromiseInStatusMonitor(
               trackingPromise!.then(
-                actOnSettled(
-                  getResolutionSetters<unknown>(localResolutionOfNextChainStep),
-                ),
+                actOnSettled({
+                  localResolutionOfNextChainStep,
+                  ...getResolutionSetters<unknown>(
+                    localResolutionOfNextChainStep,
+                  ),
+                }),
               ),
               localResolutionOfNextChainStep,
             );

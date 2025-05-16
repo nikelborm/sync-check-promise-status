@@ -6,6 +6,19 @@ import {
 } from './wrapPromise.ts';
 import { isThenable } from './isThenable.ts';
 
+const initiallyLongPendingPromise = (w: any) =>
+  new Promise(resolve =>
+    setTimeout(
+      () =>
+        resolve({
+          then(f: any) {
+            f(w);
+          },
+        }),
+      2,
+    ),
+  );
+
 describe('primitive tests', async () => {
   it('Correctly handles custom PromiseResolve', async () => {
     const promise = PromiseResolve('ok');
@@ -150,6 +163,14 @@ describe('primitive tests', async () => {
 
     assert('error' in promise);
     assert(!('result' in promise));
+    assert(!('1231' in promise));
+    assert(!('1235' in promise));
+    assert('isFulfilled' in promise);
+    assert('isPending' in promise);
+    assert('isRejected' in promise);
+    assert('isSettled' in promise);
+    assert('status' in promise);
+    assert('ctx' in promise);
   });
 
   it('correctly handles delayed Promise which resolves', async () => {
@@ -922,52 +943,92 @@ describe('specific rare branches', () => {
     ).toThrowErrorMatchingInlineSnapshot(`[Error: finally is not supported]`);
   });
 
-  it('branch4', async () => {
-    // [Survived] BlockStatement
-    // wrapPromise.ts:193:37
-    // -                     if (asyncContext) {
-    // -                       if (isThenable(childChainLinkResult)) {
-    // -                         // TODO: why the fuck removal of this .then shit doesn't change anything
-    // -                         return childChainLinkResult.then(fulfill, reject);
-    // -                       }
-    // -                       return fulfill(childChainLinkResult);
-    // -                     }
-    // +                     if (asyncContext) {}
+  it('calls second then in async context but syncrounously sets new state', async () => {
     const promise = wrapPromiseInStatusMonitor(
-      new Promise(resolve => {
-        setTimeout(
-          () =>
-            resolve({
-              then(_, onRejected: (v: unknown) => void) {
-                onRejected('right');
-              },
-            }),
-          2,
-        );
-      }),
-    ).catch(e => {
-      throw e;
-    });
-
-    const promise2 = promise.then(
-      undefined,
-      e =>
-        new Promise(resolve => {
-          setTimeout(
-            () =>
-              resolve({
-                then(onFulfill: (v: unknown) => void) {
-                  onFulfill('2' + e);
-                },
-              }),
-            2,
-          );
-        }),
+      initiallyLongPendingPromise('right'),
     );
 
-    expect(await promise2).toBe('2right');
+    assert(promise.status === 'pending');
+
+    const promise2 = promise.then(e => '2' + e);
+
+    expect(await promise).toBe('right');
     expect(promise2.result).toBe('2right');
-    expect(promise.error).toBe('right');
+    expect(promise.result).toBe('right');
+  });
+
+  it('calls second then in async context but synchronously sets new state and also with thenable: then path', async () => {
+    const thenable = {
+      then(f: Function, r: Function) {
+        f('fffff');
+        return [f, r].filter(e => typeof e === 'function').length;
+      },
+    };
+
+    const thenSpy = vi.spyOn(thenable, 'then');
+
+    const promise = wrapPromiseInStatusMonitor(
+      initiallyLongPendingPromise('right'),
+    );
+
+    assert(promise.status === 'pending');
+
+    const promise2 = promise.then(e => thenable);
+
+    expect(await promise).toBe('right');
+    expect(thenSpy).toHaveBeenCalledOnce();
+    expect(thenSpy).toHaveReturnedWith(2);
+
+    expect(promise2.result).toBe('fffff');
+    expect(promise.result).toBe('right');
+  });
+
+  it('calls second then in async context but synchronously sets new state and also with thenable: catch path', async () => {
+    const anotherThenable = {
+      then(f: any) {
+        f('lllllll');
+      },
+    };
+
+    const initiallyLongPendingPromiseThatRejectsWith = (w: any) =>
+      new Promise((resolve, reject) =>
+        setTimeout(() => reject(anotherThenable), 2),
+      );
+    const err = new Error('fffff');
+    const haveThrownMarker = vi.fn();
+
+    const thenable = {
+      then(_: Function, r: Function) {
+        try {
+          r(err);
+        } catch (error) {
+          haveThrownMarker(error);
+          throw error;
+        }
+      },
+    };
+
+    const promise = wrapPromiseInStatusMonitor(
+      initiallyLongPendingPromiseThatRejectsWith('err message'),
+    );
+
+    assert(promise.status === 'pending');
+
+    const promise2 = promise.catch(e => thenable);
+
+    let rejectedWith: unknown = Symbol('undefined');
+
+    try {
+      await promise;
+    } catch (error) {
+      rejectedWith = error;
+    }
+
+    expect(rejectedWith).toBe(anotherThenable);
+    expect(haveThrownMarker).toHaveBeenCalledExactlyOnceWith(err);
+
+    expect(promise2.error).toBe(err);
+    expect(promise.error).toBe(anotherThenable);
   });
 });
 
