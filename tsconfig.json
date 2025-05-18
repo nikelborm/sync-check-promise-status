@@ -66,5 +66,15 @@
     "noStrictGenericChecks": false
   },
   "include": ["**/*.ts"],
-  "exclude": ["vite.config.ts", "tmp", "dist"]
+  "exclude": [
+    ".github",
+    ".stryker-tmp",
+    ".vscode",
+    "dist",
+    "gh-page",
+    "node_modules",
+    "reports",
+    "tmp",
+    "vite.config.ts"
+  ]
 }

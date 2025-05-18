@@ -1,5 +1,5 @@
 import {
-  FULFILLED,
+  RESOLVED,
   newAlwaysPresentProperties,
   PENDING,
   REJECTED,
@@ -9,20 +9,22 @@ import {
 import { isThenable } from './isThenable.ts';
 import type { Gen, Resolution } from './types.ts';
 
-// const WrappedPromiseSymbol = Symbol('WrappedPromiseSymbol');
+const WrappedPromiseSymbol = Symbol('WrappedPromiseSymbol');
 
-// const isWrappedPromise = <Context = unknown, Result = never>(
-//   promise: PromiseLike<Result>,
-// ): promise is Gen<Context, Result> => WrappedPromiseSymbol in promise;
+const isWrappedPromise = <Context = unknown, Result = never>(
+  promise: PromiseLike<Result>,
+): promise is Gen<Context, Result> => WrappedPromiseSymbol in promise;
 
 export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
   promise: PromiseLike<Result>,
   ctx?: Context,
+) => _wrapPromiseInStatusMonitor(promise, ctx);
+
+const _wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
+  promise: PromiseLike<Result>,
+  ctx?: Context,
   externallyManagedResolution?: Resolution<NoInfer<Result>>,
 ) => {
-  // if (isThenable(promise) && externallyManagedResolution) {
-  // }
-
   let parentChainLinkResolution: Resolution<Result> =
     externallyManagedResolution ?? getNewPendingResolution();
 
@@ -37,7 +39,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
       : null;
 
   const getCurrentTextStatus = () =>
-    is(parentChainLinkResolution, FULFILLED)
+    is(parentChainLinkResolution, RESOLVED)
       ? 'fulfilled'
       : is(parentChainLinkResolution, REJECTED)
         ? 'rejected'
@@ -51,7 +53,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
     // getOwnPropertyDescriptor(target, key) {
     //   if (
     //     (key === 'error' && is(parentChainLinkResolution, REJECTED)) ||
-    //     (key === 'result' && is(parentChainLinkResolution, FULFILLED))
+    //     (key === 'result' && is(parentChainLinkResolution, RESOLVED))
     //   )
     //     return {
     //       value: parentChainLinkResolution.value,
@@ -80,10 +82,8 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
 
     has(target, key) {
       if (key === 'error') return is(parentChainLinkResolution, REJECTED);
-      if (key === 'result') return is(parentChainLinkResolution, FULFILLED);
-      // if (key === WrappedPromiseSymbol) {
-      //   return true;
-      // }
+      if (key === 'result') return is(parentChainLinkResolution, RESOLVED);
+      if (key === WrappedPromiseSymbol) return true;
 
       if ((newAlwaysPresentProperties as Set<unknown>).has(key)) return true;
 
@@ -97,7 +97,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
         return !is(parentChainLinkResolution, PENDING);
 
       if (accessedPromiseKey === 'isFulfilled')
-        return is(parentChainLinkResolution, FULFILLED);
+        return is(parentChainLinkResolution, RESOLVED);
 
       if (accessedPromiseKey === 'isRejected')
         return is(parentChainLinkResolution, REJECTED);
@@ -105,12 +105,11 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
       if (accessedPromiseKey === 'status') return getCurrentTextStatus();
 
       if (accessedPromiseKey === 'error' || accessedPromiseKey === 'result') {
-        if (is(parentChainLinkResolution, PENDING)) {
-          parentChainLinkResolution;
+        if (is(parentChainLinkResolution, PENDING))
           throw new Error(`Can't get ${accessedPromiseKey} of pending promise`);
-        } else if (
+        else if (
           (accessedPromiseKey === 'error') ===
-          is(parentChainLinkResolution, FULFILLED)
+          is(parentChainLinkResolution, RESOLVED)
         )
           throw new Error(
             `Can't get ${accessedPromiseKey} of ${getCurrentTextStatus()} promise. Did you mean to access .${accessedPromiseKey === 'error' ? 'result' : 'error'}?`,
@@ -185,7 +184,7 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                 ) {
                   if (!asyncContext) return receiverProxy;
 
-                  if (is(parentChainLinkResolution, FULFILLED))
+                  if (is(parentChainLinkResolution, RESOLVED))
                     return fulfill(parentChainLinkResolution.value);
                   reject(parentChainLinkResolution.value);
                 }
@@ -195,13 +194,13 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                     appropriatePromiseMethodCallback.toString() ===
                     'function () { [native code] }';
 
-                  console.log('my proxy 2', {
-                    // childChainLinkResult,
-                    parentChainLinkResolution,
-                    parentChainLinkResolutionValue:
-                      parentChainLinkResolution.value,
-                    Callbacktostr: appropriatePromiseMethodCallback.toString(),
-                  });
+                  // console.log('my proxy 2', {
+                  //   // childChainLinkResult,
+                  //   parentChainLinkResolution,
+                  //   parentChainLinkResolutionValue:
+                  //     parentChainLinkResolution.value,
+                  //   Callbacktostr: appropriatePromiseMethodCallback.toString(),
+                  // });
 
                   const childChainLinkResult = appropriatePromiseMethodCallback(
                     parentChainLinkResolution.value,
@@ -229,13 +228,13 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                     return fulfill(childChainLinkResult);
                   }
 
-                  console.log('my proxy 2', {
-                    childChainLinkResult,
-                    parentChainLinkResolution,
-                    parentChainLinkResolutionValue:
-                      parentChainLinkResolution.value,
-                    Callbacktostr: appropriatePromiseMethodCallback.toString(),
-                  });
+                  // console.log('my proxy 2', {
+                  //   childChainLinkResult,
+                  //   parentChainLinkResolution,
+                  //   parentChainLinkResolutionValue:
+                  //     parentChainLinkResolution.value,
+                  //   Callbacktostr: appropriatePromiseMethodCallback.toString(),
+                  // });
 
                   removeWarning();
                   return isThenable(childChainLinkResult)
@@ -252,11 +251,8 @@ export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
                 }
               };
 
-            if (!is(parentChainLinkResolution, PENDING)) {
-              const asd = actOnSettled()();
-
-              return asd;
-            }
+            if (!is(parentChainLinkResolution, PENDING))
+              return actOnSettled()();
 
             let localResolutionOfNextChainStep =
               getNewPendingResolution() as Resolution<unknown>;
@@ -325,17 +321,17 @@ const getResolutionSetters = <Result = never>(
     ): ResolutionSetter<FlagEnumValue, Result> =>
     value => {
       if (resolution.status === PENDING) {
-        // // @ts-ignore
-        // resolution.status = status;
-        // // @ts-ignore
-        // resolution.value = value;
+        // @ts-ignore
+        resolution.status = status;
+        // @ts-ignore
+        resolution.value = value;
       }
     };
 
-  const fulfill = setResolution(FULFILLED);
-  const reject = setResolution(REJECTED);
-
-  return { fulfill, reject };
+  return {
+    fulfill: setResolution(RESOLVED),
+    reject: setResolution(REJECTED),
+  };
 };
 
 const getNewPendingResolution = () => ({
@@ -355,14 +351,29 @@ const is = <const FlagEnumValue extends FlagEnumValues, Result = never>(
   FlagEnumValue
 > => resolution.status === statusToCheckFor;
 
-export const PromiseResolve = <T, Context>(value: T, context?: Context) =>
-  wrapPromiseInStatusMonitor(Promise.resolve(value) as Promise<T>, context, {
-    status: FULFILLED,
-    value,
-  });
+export const PromiseResolve = (<T, Context>(value?: T, context?: Context) =>
+  isThenable(value)
+    ? _wrapPromiseInStatusMonitor(value, context)
+    : _wrapPromiseInStatusMonitor(
+        Promise.resolve(value) as Promise<T>,
+        context,
+        {
+          status: RESOLVED,
+          value: value!,
+        },
+      )) as PromiseResolve;
 
-export const PromiseReject = <T, Context>(value: T, context?: Context) =>
-  wrapPromiseInStatusMonitor(Promise.reject(value), context, {
+type PromiseResolve = {
+  (): Promise<void>;
+  <T, Context>(value: T, context?: Context): Gen<Context, Awaited<T>>;
+  <T, Context>(
+    value: T | PromiseLike<T>,
+    context?: Context,
+  ): Gen<Context, Awaited<T>>;
+};
+
+export const PromiseReject = <T, Context>(reason: any, context?: Context) =>
+  _wrapPromiseInStatusMonitor(Promise.reject<T>(reason), context, {
     status: REJECTED,
-    value,
+    value: reason,
   });
