@@ -932,198 +932,6 @@ describe('specific rare branches', () => {
     b.catch(() => {});
   });
 
-  it.skip("doesn't automatically call `.then(...)` to track promises when externally managed", async () => {
-    //  wrapPromise.ts |  93.44 |   93.44 |      169 |         2 |         12 |        0 |        6 |
-    const usualResolvedPromiseArgsLengths = {
-      '0': 0,
-      '1': 0,
-      '2': 0,
-    };
-    const usualThenable = new Proxy(
-      {},
-      {
-        get(target, p, receiver) {
-          let valSource = Reflect.get(target, p, receiver);
-          if (p !== 'then') return valSource;
-          // @ts-ignore
-          let val = f => {
-            console.log('usualThenable called with stack: ', new Error().stack);
-            f(999);
-          };
-
-          return new Proxy(val, {
-            apply(target, thisArg, argArray) {
-              // @ts-ignore
-              usualResolvedPromiseArgsLengths[argArray.length] += 1;
-
-              return Reflect.apply(val, thisArg, argArray);
-            },
-          });
-        },
-      },
-    ) as any;
-
-    console.log('usualResolvedPromise preinit');
-    const usualResolvedPromise = Promise.resolve(usualThenable);
-    console.log('usualResolvedPromise postinit');
-
-    expect(usualResolvedPromiseArgsLengths).toEqual({
-      '0': 0,
-      '1': 0,
-      '2': 0,
-    });
-
-    console.log('pre long tick');
-    await initiallyLongPendingPromise('2');
-    console.log('post long tick');
-    // Promise.resolve will call it, but not internal mechanism of value tracking
-
-    expect(usualResolvedPromiseArgsLengths).toEqual({
-      '0': 0,
-      '1': 0,
-      '2': 1,
-    });
-
-    console.log('usualResolvedPromise pre await result');
-    console.log('result: ', await usualResolvedPromise);
-    console.log('usualResolvedPromise post await result');
-
-    expect(usualResolvedPromiseArgsLengths).toEqual({
-      '0': 0,
-      '1': 0,
-      '2': 1,
-    });
-
-    console.log('pre long tick');
-    await initiallyLongPendingPromise('2');
-    console.log('post long tick');
-    // Promise.resolve will call it, but not internal mechanism of value tracking
-
-    expect(usualResolvedPromiseArgsLengths).toEqual({
-      '0': 0,
-      '1': 0,
-      '2': 1,
-    });
-
-    console.log('usualResolvedPromise pre await result');
-    console.log('result: ', await usualResolvedPromise);
-    console.log('usualResolvedPromise post await result');
-
-    expect(usualResolvedPromiseArgsLengths).toEqual({
-      '0': 0,
-      '1': 0,
-      '2': 1,
-    });
-
-    // /////////////////////////////////////////////
-
-    const myResolvedPromiseArgsLengths = {
-      '0': 0,
-      '1': 0,
-      '2': 0,
-    };
-
-    const gen = () => {
-      let r:
-        | { status: 'pending' }
-        | { status: 'fulfilled'; v: unknown }
-        | { status: 'rejected'; v: unknown } = { status: 'pending' };
-
-      // WeakSet?
-      const consumersOnRejected = new Set<(v: unknown) => void>();
-      const consumersOnResolved = new Set<(v: unknown) => void>();
-
-      setTimeout(() => {
-        r = { status: 'fulfilled', v: 'yay' };
-
-        if (r.status === 'fulfilled') {
-          for (const cb of consumersOnResolved) {
-            try {
-              cb(r.v);
-            } catch (error) {
-              // ?????
-            }
-          }
-        } else {
-          for (const cb of consumersOnRejected) {
-            try {
-              // @ts-ignore
-              cb(r.v);
-            } catch (error) {
-              // ?????
-            }
-          }
-        }
-      }, 2000);
-
-      const myThenable = new Proxy(
-        { then: () => {} },
-        {
-          get(target, p, receiver) {
-            let valSource = Reflect.get(target, p, receiver);
-
-            if (p !== 'then') return valSource;
-
-            return new Proxy(valSource, {
-              getPrototypeOf(target) {
-                return Function;
-              },
-              apply(valSource, thisArg, argArray) {
-                // @ts-ignore
-                myResolvedPromiseArgsLengths[argArray.length] += 1;
-
-                if (r.status === 'fulfilled') {
-                  return argArray[0](r.v);
-                } else if (r.status === 'rejected') {
-                  return argArray[1](r.v);
-                } else {
-                  consumersOnResolved.add(argArray[0]);
-                  consumersOnRejected.add(argArray[1]);
-                  return;
-                }
-              },
-            });
-          },
-        },
-      ) as any;
-      return myThenable;
-    };
-
-    const myThenable = gen();
-    console.log('myResolvedPromise preinit');
-    const myPromise = myThenable;
-    console.log('myResolvedPromise postinit');
-
-    expect(myResolvedPromiseArgsLengths).toEqual({
-      '0': 0,
-      '1': 0,
-      '2': 0,
-    });
-
-    console.log('pre long tick');
-    await initiallyLongPendingPromise('2');
-    console.log('post long tick');
-    // Promise.resolve will call it, but not internal mechanism of value tracking
-    // expect(myResolvedPromiseArgsLengths).toEqual({
-    //   '0': 0,
-    //   '1': 0,
-    //   '2': 1,
-    // });
-
-    console.log('myResolvedPromise pre await result');
-    const result = await myPromise;
-    console.log('result: ', result);
-    console.log('myResolvedPromise post await result');
-
-    expect(myResolvedPromiseArgsLengths).toEqual({
-      '0': 0,
-      '1': 0,
-      '2': 1,
-    });
-
-    // Promise.resolve consumed it
-  });
-
   it('throws when called with finally', () => {
     expect(() =>
       PromiseResolve('hello').finally(() => {}),
@@ -1162,7 +970,7 @@ describe('specific rare branches', () => {
 
     assert(promise.status === 'pending');
 
-    const promise2 = promise.then(e => thenable);
+    const promise2 = promise.then(() => thenable);
 
     expect(await promise).toBe('right');
     expect(thenSpy).toHaveBeenCalledOnce();
@@ -1181,10 +989,8 @@ describe('specific rare branches', () => {
       },
     };
 
-    const initiallyLongPendingPromiseThatRejectsWith = (w: any) =>
-      new Promise((resolve, reject) =>
-        setTimeout(() => reject(anotherThenable), 2),
-      );
+    const initiallyLongPendingPromiseThatRejectsWith = (_: any) =>
+      new Promise((_, reject) => setTimeout(() => reject(anotherThenable), 2));
     const err = new Error('fffff');
     const haveThrownMarker = vi.fn();
 
@@ -1205,7 +1011,7 @@ describe('specific rare branches', () => {
 
     assert(promise.status === 'pending');
 
-    const promise2 = promise.catch(e => thenable);
+    const promise2 = promise.catch(() => thenable);
 
     let rejectedWith: unknown = Symbol('undefined');
 

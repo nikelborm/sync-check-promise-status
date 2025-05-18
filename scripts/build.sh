@@ -10,10 +10,5 @@ command -v tsc >/dev/null 2>&1 || {
   exit 1
 }
 
-command -v jq >/dev/null 2>&1 || {
-  echo "jq is required but not installed."
-  exit 1
-}
-
 rimraf dist
 tsc
