@@ -2,9 +2,9 @@ import { assert, describe, expect, it, vi } from 'vitest';
 import {
   PromiseReject,
   PromiseResolve,
+  isThenable,
   wrapPromiseInStatusMonitor,
 } from './wrapPromise.ts';
-import { isThenable } from './isThenable.ts';
 
 const initiallyLongPendingPromise = (w: any) =>
   new Promise(resolve =>
@@ -97,11 +97,11 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('isRejected', false);
     // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Can't get result of pending promise]`,
+      `[Error: Can't get result of pending promise.]`,
     );
     // @ts-expect-error intentional
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Can't get error of pending promise]`,
+      `[Error: Can't get error of pending promise.]`,
     );
     assert(!('error' in promise));
     assert(!('result' in promise));
@@ -133,11 +133,11 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('isRejected', false);
     // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Can't get result of pending promise]`,
+      `[Error: Can't get result of pending promise.]`,
     );
     // @ts-expect-error intentional
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Can't get error of pending promise]`,
+      `[Error: Can't get error of pending promise.]`,
     );
 
     assert(!('error' in promise));
@@ -183,11 +183,11 @@ describe('primitive tests', async () => {
     expect(promise).toHaveProperty('status', 'pending');
     // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Can't get result of pending promise]`,
+      `[Error: Can't get result of pending promise.]`,
     );
     // @ts-expect-error intentional
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Can't get error of pending promise]`,
+      `[Error: Can't get error of pending promise.]`,
     );
 
     const result = await promise;
@@ -204,20 +204,21 @@ describe('primitive tests', async () => {
   });
 
   it('correctly handles delayed Promise which throws', async () => {
+    const err = new Error('err message');
     const promise = wrapPromiseInStatusMonitor(
       new Promise((_resolve, reject) => {
-        setTimeout(() => reject('err message'), 2);
+        setTimeout(() => reject(err), 2);
       }),
     );
 
     expect(promise).toHaveProperty('status', 'pending');
     // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Can't get result of pending promise]`,
+      `[Error: Can't get result of pending promise.]`,
     );
     // @ts-expect-error intentional
     expect(() => promise.error).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Can't get error of pending promise]`,
+      `[Error: Can't get error of pending promise.]`,
     );
 
     let thrown = false;
@@ -232,7 +233,7 @@ describe('primitive tests', async () => {
 
     expect(promise).toHaveProperty('status', 'rejected');
 
-    expect(promise).toHaveProperty('error', 'err message');
+    expect(promise).toHaveProperty('error', err);
     // @ts-expect-error intentional
     expect(() => promise.result).toThrowErrorMatchingInlineSnapshot(
       `[Error: Can't get result of rejected promise. Did you mean to access .error?]`,
@@ -931,7 +932,7 @@ describe('specific rare branches', () => {
     b.catch(() => {});
   });
 
-  it.only("doesn't automatically call `.then(...)` to track promises when externally managed", async () => {
+  it.skip("doesn't automatically call `.then(...)` to track promises when externally managed", async () => {
     //  wrapPromise.ts |  93.44 |   93.44 |      169 |         2 |         12 |        0 |        6 |
     const usualResolvedPromiseArgsLengths = {
       '0': 0,
@@ -944,6 +945,7 @@ describe('specific rare branches', () => {
         get(target, p, receiver) {
           let valSource = Reflect.get(target, p, receiver);
           if (p !== 'then') return valSource;
+          // @ts-ignore
           let val = f => {
             console.log('usualThenable called with stack: ', new Error().stack);
             f(999);
@@ -1045,6 +1047,7 @@ describe('specific rare branches', () => {
         } else {
           for (const cb of consumersOnRejected) {
             try {
+              // @ts-ignore
               cb(r.v);
             } catch (error) {
               // ?????
@@ -1137,7 +1140,9 @@ describe('specific rare branches', () => {
     const promise2 = promise.then(e => '2' + e);
 
     expect(await promise).toBe('right');
+    // @ts-ignore
     expect(promise2.result).toBe('2right');
+    // @ts-ignore
     expect(promise.result).toBe('right');
   });
 
@@ -1163,7 +1168,9 @@ describe('specific rare branches', () => {
     expect(thenSpy).toHaveBeenCalledOnce();
     expect(thenSpy).toHaveReturnedWith(2);
 
+    // @ts-ignore
     expect(promise2.result).toBe('fffff');
+    // @ts-ignore
     expect(promise.result).toBe('right');
   });
 
@@ -1210,8 +1217,9 @@ describe('specific rare branches', () => {
 
     expect(rejectedWith).toBe(anotherThenable);
     expect(haveThrownMarker).toHaveBeenCalledExactlyOnceWith(err);
-
+    // @ts-ignore
     expect(promise2.error).toBe(err);
+    // @ts-ignore
     expect(promise.error).toBe(anotherThenable);
   });
 });

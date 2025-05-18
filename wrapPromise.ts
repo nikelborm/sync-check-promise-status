@@ -1,19 +1,33 @@
 import {
-  RESOLVED,
   newAlwaysPresentProperties,
   PENDING,
   REJECTED,
+  RESOLVED,
   type FlagEnumValues,
   type SETTLED,
 } from './consts.ts';
-import { isThenable } from './isThenable.ts';
 import type { Gen, Resolution } from './types.ts';
 
 const WrappedPromiseSymbol = Symbol('WrappedPromiseSymbol');
 
+export const isThenable = (t: unknown): t is PromiseLike<unknown> => {
+  return (
+    typeof t === 'object' &&
+    t !== null &&
+    (('then' in t && typeof t.then === 'function') ||
+      isWrappedPromise(t as PromiseLike<unknown>))
+  );
+};
+
 const isWrappedPromise = <Context = unknown, Result = never>(
   promise: PromiseLike<Result>,
-): promise is Gen<Context, Result> => WrappedPromiseSymbol in promise;
+): promise is Gen<Context, Result> => {
+  try {
+    return WrappedPromiseSymbol in promise;
+  } catch (error) {
+    return false;
+  }
+};
 
 export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
   promise: PromiseLike<Result>,
@@ -47,7 +61,7 @@ const _wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
 
   // const prototype = {};
 
-  let ifItIsErrorWasItSuppressed = false;
+  let wasErrorChannelSuppressed = false;
 
   const promiseHandlers = {
     // getOwnPropertyDescriptor(target, key) {
@@ -105,14 +119,23 @@ const _wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
       if (accessedPromiseKey === 'status') return getCurrentTextStatus();
 
       if (accessedPromiseKey === 'error' || accessedPromiseKey === 'result') {
-        if (is(parentChainLinkResolution, PENDING))
-          throw new Error(`Can't get ${accessedPromiseKey} of pending promise`);
-        else if (
+        if (
+          is(parentChainLinkResolution, PENDING) ||
+          // prettier-ignore
           (accessedPromiseKey === 'error') ===
-          is(parentChainLinkResolution, RESOLVED)
+            is(parentChainLinkResolution, RESOLVED)
         )
+          // prettier-ignore
           throw new Error(
-            `Can't get ${accessedPromiseKey} of ${getCurrentTextStatus()} promise. Did you mean to access .${accessedPromiseKey === 'error' ? 'result' : 'error'}?`,
+            "Can't get "
+            + accessedPromiseKey
+            + ' of '
+            + getCurrentTextStatus()
+            + ' promise.'
+            + (is(parentChainLinkResolution, PENDING)
+              ? ''
+              : (' Did you mean to access '
+                + (accessedPromiseKey === 'error' ? '.result?' : '.error?'))),
           );
         else return parentChainLinkResolution.value;
       }
@@ -133,161 +156,124 @@ const _wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
       )
         return valueAtKeyInPromise;
 
+      const removeUnhandledRejectionWarning = () => {
+        if (
+          !wasErrorChannelSuppressed &&
+          is(parentChainLinkResolution, REJECTED)
+        ) {
+          promise.then(void 0, () => {});
+          wasErrorChannelSuppressed = true;
+        }
+      };
+
       return new Proxy(valueAtKeyInPromise, {
         apply(
           _targetPromiseMethod: Function,
           _thisOfPromiseMethod,
           promiseMethodCallArgArray,
         ) {
-          const buildReturnValue = (
-            buildAppropriateCallback: () => Function,
-          ) => {
-            const actOnSettled =
-              (asyncContext?: {
-                localResolutionOfNextChainStep: Resolution<unknown>;
-                fulfill: (value: unknown) => void;
-                reject: (value: unknown) => void;
-              }) =>
-              () => {
-                const removeWarning = () => {
-                  if (
-                    !ifItIsErrorWasItSuppressed &&
-                    is(parentChainLinkResolution, REJECTED)
-                  ) {
-                    promise.then(void 0, () => {});
-                    ifItIsErrorWasItSuppressed = true;
-                  }
-                };
+          if (accessedPromiseKey !== 'catch' && accessedPromiseKey !== 'then')
+            throw new Error('finally is not supported');
 
-                const appropriatePromiseMethodCallback =
-                  buildAppropriateCallback();
+          const handleCallback = ({
+            returnOnSyncFail,
+            returnOnSyncExit,
+            returnOnInvalid,
+          }: {
+            returnOnInvalid: () => unknown;
+            returnOnSyncExit: (result: unknown) => unknown;
+            returnOnSyncFail: (err: unknown) => unknown;
+          }) => {
+            const appropriatePromiseMethodCallback =
+              accessedPromiseKey === 'catch'
+                ? is(parentChainLinkResolution, REJECTED)
+                  ? promiseMethodCallArgArray[0]
+                  : null
+                : accessedPromiseKey === 'then'
+                  ? promiseMethodCallArgArray[
+                      +is(parentChainLinkResolution, REJECTED)
+                    ]
+                  : null;
 
-                const fulfill = (result: unknown) => {
-                  removeWarning();
-                  asyncContext!.fulfill(result);
-                  return result;
-                };
+            // if parent's resolution is rejected, the only thing that matters
+            // is presence of onRejected callback. If CB is invalid (be it
+            // undefined when user passes only the first param like
+            // `.then(onFulfilled)`, or invalid for other reason), then
+            // `.then` call is useless. Same logic for onFulfilled.
+            if (!isValidPromiseMethodCallback(appropriatePromiseMethodCallback))
+              return returnOnInvalid();
 
-                const reject = (error: unknown) => {
-                  asyncContext!.reject(error);
-                  throw error;
-                };
-                // if parent's resolution is rejected, the only thing that matters is
-                // presence of onRejected callback. If CB is invalid (be it undefined when
-                // user passes only the first param like `.then(onFulfilled)`, or invalid
-                // for other reason), then `.then` call is useless. Same logic for
-                // onFulfilled.
-                if (
-                  !isValidPromiseMethodCallback(
-                    appropriatePromiseMethodCallback,
-                  )
-                ) {
-                  if (!asyncContext) return receiverProxy;
+            // ????!
+            removeUnhandledRejectionWarning();
 
-                  if (is(parentChainLinkResolution, RESOLVED))
-                    return fulfill(parentChainLinkResolution.value);
-                  reject(parentChainLinkResolution.value);
-                }
+            try {
+              const childChainLinkResult = appropriatePromiseMethodCallback(
+                parentChainLinkResolution.value,
+              );
+              // TODO: also maybe check for it returning WrappedPromise with
+              // isWrappedPromise, to not add redundant status handlers
 
-                try {
-                  const isItActualInCallbackContext =
-                    appropriatePromiseMethodCallback.toString() ===
-                    'function () { [native code] }';
-
-                  // console.log('my proxy 2', {
-                  //   // childChainLinkResult,
-                  //   parentChainLinkResolution,
-                  //   parentChainLinkResolutionValue:
-                  //     parentChainLinkResolution.value,
-                  //   Callbacktostr: appropriatePromiseMethodCallback.toString(),
-                  // });
-
-                  const childChainLinkResult = appropriatePromiseMethodCallback(
-                    parentChainLinkResolution.value,
-                  );
-
-                  if (isItActualInCallbackContext) return;
-
-                  // TODO: also check for it returning WrappedPromise with isWrappedPromise, to not add redundant status handlers
-
-                  if (asyncContext) {
-                    if (isThenable(childChainLinkResult)) {
-                      const t = childChainLinkResult.then(fulfill, reject);
-                      if (
-                        is(asyncContext.localResolutionOfNextChainStep, PENDING)
-                      ) {
-                        // plan as promise
-                        // ??????????????????????!!!!!!!!!!!!!!!!
-                        return t;
-                      }
-
-                      removeWarning();
-                      return asyncContext.localResolutionOfNextChainStep.value;
-                    }
-
-                    return fulfill(childChainLinkResult);
-                  }
-
-                  // console.log('my proxy 2', {
-                  //   childChainLinkResult,
-                  //   parentChainLinkResolution,
-                  //   parentChainLinkResolutionValue:
-                  //     parentChainLinkResolution.value,
-                  //   Callbacktostr: appropriatePromiseMethodCallback.toString(),
-                  // });
-
-                  removeWarning();
-                  return isThenable(childChainLinkResult)
-                    ? (() => {
-                        return wrapPromiseInStatusMonitor(childChainLinkResult);
-                      })()
-                    : isItActualInCallbackContext
-                      ? void 0
-                      : PromiseResolve(childChainLinkResult);
-                } catch (error) {
-                  if (asyncContext) reject(error);
-                  removeWarning();
-                  return PromiseReject(error);
-                }
-              };
-
-            if (!is(parentChainLinkResolution, PENDING))
-              return actOnSettled()();
-
-            let localResolutionOfNextChainStep =
-              getNewPendingResolution() as Resolution<unknown>;
-
-            return wrapPromiseInStatusMonitor(
-              trackingPromise!.then(
-                actOnSettled({
-                  localResolutionOfNextChainStep,
-                  ...getResolutionSetters<unknown>(
-                    localResolutionOfNextChainStep,
-                  ),
-                }),
-              ),
-              localResolutionOfNextChainStep,
-            );
+              return returnOnSyncExit(childChainLinkResult);
+            } catch (error) {
+              return returnOnSyncFail(error);
+            }
           };
 
-          if (accessedPromiseKey === 'catch') {
-            return buildReturnValue(() =>
-              is(parentChainLinkResolution, REJECTED)
-                ? promiseMethodCallArgArray[0]
-                : null,
-            );
-          }
+          if (!is(parentChainLinkResolution, PENDING))
+            return handleCallback({
+              returnOnInvalid: () => receiverProxy,
+              returnOnSyncExit: PromiseResolve,
+              returnOnSyncFail: PromiseReject,
+            });
 
-          if (accessedPromiseKey === 'then') {
-            return buildReturnValue(
-              () =>
-                promiseMethodCallArgArray[
-                  +is(parentChainLinkResolution, REJECTED)
-                ],
-            );
-          }
+          let localResolutionOfNextChainStep =
+            getNewPendingResolution() as Resolution<unknown>;
 
-          throw new Error('finally is not supported');
+          const localResolutionTracker = getResolutionSetters<unknown>(
+            localResolutionOfNextChainStep,
+          );
+
+          const fulfill = (result: unknown) => {
+            localResolutionTracker.fulfill(result);
+            return result;
+          };
+
+          const reject = (error: unknown) => {
+            localResolutionTracker.reject(error);
+            throw error;
+          };
+
+          return wrapPromiseInStatusMonitor(
+            trackingPromise!.then(() =>
+              handleCallback({
+                returnOnInvalid: () =>
+                  (is(parentChainLinkResolution, RESOLVED) ? fulfill : reject)(
+                    parentChainLinkResolution.value,
+                  ),
+                returnOnSyncExit: childChainLinkResult => {
+                  if (isThenable(childChainLinkResult)) {
+                    const childPromise = childChainLinkResult.then(
+                      fulfill,
+                      reject,
+                    );
+
+                    if (is(localResolutionOfNextChainStep, PENDING))
+                      return childPromise;
+                    // if it was resolved immediately inside, we can return this
+                    // immediate resolution right inside this
+                    // `trackingPromise.then(...)` call
+                    else if (is(localResolutionOfNextChainStep, RESOLVED))
+                      return localResolutionOfNextChainStep.value;
+                    else throw localResolutionOfNextChainStep.value;
+                  }
+
+                  return fulfill(childChainLinkResult);
+                },
+                returnOnSyncFail: reject,
+              }),
+            ),
+            localResolutionOfNextChainStep,
+          );
 
           // if (accessedPromiseKey === 'finally') {
           //   // onFinally is guaranteed to be valid by areAllMethodArgsGarbage,

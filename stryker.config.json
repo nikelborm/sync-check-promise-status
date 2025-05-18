@@ -7,7 +7,7 @@
   "vitest": {
     "configFile": "vite.config.ts"
   },
-  "mutate": ["wrapPromise.ts", "consts.ts", "isThenable.ts"],
+  "mutate": ["wrapPromise.ts", "consts.ts"],
   "testRunner_comment": "Take a look at https://stryker-mutator.io/docs/stryker-js/vitest-runner for information about the vitest plugin.",
   "coverageAnalysis": "perTest"
 }

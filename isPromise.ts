@@ -1,4 +1,4 @@
-import { isThenable } from './isThenable.ts';
+import { isThenable } from './wrapPromise.ts';
 
 export const isPromise = (t: unknown): t is Promise<unknown> =>
   isThenable(t) &&
