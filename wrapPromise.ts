@@ -19,7 +19,7 @@ export const isThenable = (t: unknown): t is PromiseLike<unknown> => {
   );
 };
 
-const isWrappedPromise = <Context = unknown, Result = never>(
+export const isWrappedPromise = <Context = unknown, Result = never>(
   promise: PromiseLike<Result>,
 ): promise is Gen<Context, Result> => {
   try {
@@ -28,6 +28,8 @@ const isWrappedPromise = <Context = unknown, Result = never>(
     return false;
   }
 };
+
+//  wrapPromise.ts |  93.88 |   93.88 |      184 |         0 |         12 |        0 |        5 |
 
 export const wrapPromiseInStatusMonitor = <Context = undefined, Result = never>(
   promise: PromiseLike<Result>,

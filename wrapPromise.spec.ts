@@ -3,6 +3,7 @@ import {
   PromiseReject,
   PromiseResolve,
   isThenable,
+  isWrappedPromise,
   wrapPromiseInStatusMonitor,
 } from './wrapPromise.ts';
 
@@ -1042,5 +1043,29 @@ describe('isThenable', () => {
     expect(isThenable({ then: () => {} })).toBe(true);
     expect(isThenable(PromiseResolve(123))).toBe(true);
     expect(isThenable(Promise.resolve(123))).toBe(true);
+  });
+});
+
+describe('isWrappedPromise', () => {
+  it('returns correct answers', () => {
+    // @ts-ignore
+    expect(isWrappedPromise(123)).toBe(false);
+    // @ts-ignore
+    expect(isWrappedPromise('123')).toBe(false);
+    // @ts-ignore
+    expect(isWrappedPromise(undefined)).toBe(false);
+    // @ts-ignore
+    expect(isWrappedPromise({ then() {} })).toBe(false);
+    // @ts-ignore
+    expect(isWrappedPromise({ then: {} })).toBe(false);
+    // @ts-ignore
+    expect(isWrappedPromise({ then: null })).toBe(false);
+    // @ts-ignore
+    expect(isWrappedPromise({ then: 'null' })).toBe(false);
+    // @ts-ignore
+    expect(isWrappedPromise({ then: () => {} })).toBe(false);
+    // @ts-ignore
+    expect(isWrappedPromise(PromiseResolve(123))).toBe(true);
+    expect(isWrappedPromise(Promise.resolve(123))).toBe(false);
   });
 });
