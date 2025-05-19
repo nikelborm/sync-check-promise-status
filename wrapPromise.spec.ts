@@ -638,30 +638,30 @@ describe('channel switches', () => {
 });
 
 describe('specific rare branches', () => {
-  it('branch1', async () => {
+  it('when rejected promises are returned from catches, they flow and being interpreted', async () => {
     const mock1 = vi.fn();
+    const mock2 = vi.fn();
+    const mock3 = vi.fn();
     const promise = wrapPromiseInStatusMonitor(
       new Promise((_resolve, reject) => {
         setTimeout(() => reject('err message1'), 2);
       }),
     );
 
-    const result = await promise
-      .catch()
-      .catch(
-        err =>
-          new Promise((_resolve, reject) => {
-            mock1();
-            setTimeout(() => reject(err + '=> err message2'), 2);
-          }),
-      )
-      .catch(
-        err =>
-          new Promise((_resolve, reject) => {
-            mock1();
-            setTimeout(() => reject(err + '=> err message3'), 2);
-          }),
-      )
+    const result1 = promise.catch().catch(async err => {
+      return new Promise((_resolve, reject) => {
+        mock1();
+        setTimeout(() => reject(err + '=> err message2'), 2);
+      });
+    });
+
+    const result2 = result1
+      .catch(err => {
+        return new Promise((_resolve, reject) => {
+          mock1();
+          setTimeout(() => reject(err + '=> err message3'), 2);
+        });
+      })
       .catch(
         err =>
           new Promise((_resolve, reject) => {
@@ -671,19 +671,105 @@ describe('specific rare branches', () => {
       )
       .then(
         () => {},
-        e => {
-          mock1();
-          return e;
+        v => {
+          mock2(v);
+          return v;
         },
       )
+
       .catch()
-      .then(e => e);
+      .then(e => {
+        mock3(e);
+        return e;
+      });
 
-    expect(mock1).toBeCalledTimes(4);
+    let result1Err;
 
-    expect(result).toMatchInlineSnapshot(
-      `"err message1=> err message2=> err message3=> err message4"`,
+    try {
+      await result1;
+    } catch (error) {
+      result1Err = error;
+    }
+    expect(result1Err).toBe('err message1=> err message2');
+
+    const result = await result2;
+
+    expect(mock1).toBeCalledTimes(3);
+    expect(mock2).toHaveBeenCalledExactlyOnceWith(
+      'err message1=> err message2=> err message3=> err message4',
     );
+    expect(mock3).toHaveBeenCalledExactlyOnceWith(
+      'err message1=> err message2=> err message3=> err message4',
+    );
+    expect(result).toBe(
+      'err message1=> err message2=> err message3=> err message4',
+    );
+  });
+
+  it("when rejected promises are thrown from catches, they don't flow and NOT being interpreted", async () => {
+    const mock1 = vi.fn();
+    const mock2 = vi.fn();
+    const mock3 = vi.fn();
+    const promise = wrapPromiseInStatusMonitor(
+      new Promise((_resolve, reject) => {
+        setTimeout(() => reject('err message1'), 2);
+      }),
+    );
+    const prom = new Promise((_resolve, reject) => {
+      mock1();
+      setTimeout(() => reject('err message1=> err message2'), 10);
+    });
+
+    const result1 = promise.catch().catch(err => {
+      throw prom;
+    });
+
+    const result2 = result1
+      .catch(err => {
+        mock1();
+        throw err;
+      })
+      .catch(err => {
+        mock1();
+        throw err;
+      })
+      .then(
+        () => {},
+        v => {
+          mock2(v);
+          return v;
+        },
+      )
+
+      .catch()
+      .then(
+        () => {},
+        e => {
+          mock3(e);
+          return e;
+        },
+      );
+
+    let result1Err;
+
+    try {
+      await result1;
+    } catch (error) {
+      result1Err = error;
+    }
+    expect(result1Err).toBe(prom);
+    expect(result1.error).toBe(prom);
+
+    const result = await result2;
+
+    expect(mock1).toBeCalledTimes(3);
+    expect(mock2).toHaveBeenCalledExactlyOnceWith(prom);
+    expect(mock3).toHaveBeenCalledExactlyOnceWith(
+      'err message1=> err message2',
+    );
+
+    expect(result2.result).toBe('err message1=> err message2');
+    expect(result).toBe('err message1=> err message2');
   });
 
   it('branch2', async () => {
@@ -918,7 +1004,8 @@ describe('specific rare branches', () => {
     if (promise2.status === 'rejected') {
       expect(promise2.error).toEqual(123);
       promise2.catch(() => {});
-    } else assert(false, 'promise.status of PromiseReject should be rejected');
+    } else
+      expect.unreachable('promise.status of PromiseReject should be rejected');
   });
 
   it('passes as Promise when converted to string', () => {
@@ -1028,6 +1115,296 @@ describe('specific rare branches', () => {
     expect(promise2.error).toBe(err);
     // @ts-ignore
     expect(promise.error).toBe(anotherThenable);
+
+    promise2.catch(() => {});
+  });
+
+  it('correctly handles ambiguous resolutions in the context of status tracking initialization', async () => {
+    const spyConsole = vi.spyOn(console, 'error');
+
+    const err = new Error('wtf');
+
+    const mock1 = vi.fn();
+    const mock2 = vi.fn();
+
+    class FuckedUpPromise {
+      then(
+        onFulfilled: (v: unknown) => void,
+        onRejected: (v: unknown) => void,
+      ) {
+        mock1();
+        onFulfilled('Good!');
+        onRejected(err);
+      }
+    }
+
+    const fuckedUpPromise = new FuckedUpPromise();
+
+    const promise = wrapPromiseInStatusMonitor(
+      fuckedUpPromise as Promise<unknown>,
+    );
+
+    await promise;
+
+    expect(promise.isFulfilled).toBe(true);
+
+    if (promise.isFulfilled) expect(promise.result).toBe('Good!');
+
+    expect(mock1).toHaveBeenCalledOnce();
+
+    expect(spyConsole).toHaveBeenCalledExactlyOnceWith(
+      `Can't %s promise, that's already %s`,
+      'reject',
+      'fulfilled',
+    );
+
+    class FuckedUpPromise2 {
+      then(
+        onFulfilled: (v: unknown) => void,
+        onRejected: (v: unknown) => void,
+      ) {
+        mock2();
+        try {
+          onRejected(err);
+        } catch (error) {}
+        onFulfilled('Good!');
+      }
+    }
+
+    const fuckedUpPromise2 = new FuckedUpPromise2();
+
+    const promise2 = wrapPromiseInStatusMonitor(
+      fuckedUpPromise2 as Promise<unknown>,
+    );
+    // once to set the internal state tracker
+    expect(mock2).toHaveBeenCalledOnce();
+
+    await initiallyLongPendingPromise('s');
+    await initiallyLongPendingPromise('s');
+
+    try {
+      await promise2;
+    } catch (error) {}
+
+    expect(promise2.isRejected).toBe(true);
+
+    if (promise2.isRejected) expect(promise2.error).toBe(err);
+
+    // once to set the internal state tracker and the second time to await
+    expect(mock2).toHaveBeenCalledOnce();
+
+    expect(spyConsole).toHaveBeenNthCalledWith(
+      2,
+      `Can't %s promise, that's already %s`,
+      'fulfill',
+      'rejected',
+    );
+  });
+
+  it('correctly handles ambiguous resolutions in the context of setting immediate then on Pending promise', async () => {
+    const mock1 = vi.fn();
+    const mock2 = vi.fn();
+
+    const err = new Error('wtf');
+
+    class FuckedUpPromise {
+      then(
+        onFulfilled: (v: unknown) => void,
+        onRejected: (v: unknown) => void,
+      ) {
+        try {
+          onFulfilled('Good!');
+          onRejected(err);
+        } catch (error) {}
+        mock1();
+      }
+    }
+
+    const fuckedUpPromise = new FuckedUpPromise();
+
+    const promise = wrapPromiseInStatusMonitor(Promise.resolve('yeah')).then(
+      () => fuckedUpPromise,
+    );
+
+    await promise;
+
+    expect(promise.isFulfilled).toBe(true);
+
+    if (promise.isFulfilled) expect(promise.result).toBe('Good!');
+
+    expect(mock1).toHaveBeenCalledOnce();
+
+    class FuckedUpPromise2 {
+      then(
+        onFulfilled: (v: unknown) => void,
+        onRejected: (v: unknown) => void,
+      ) {
+        try {
+          onRejected(err);
+        } catch (error) {}
+        onFulfilled('Good!');
+
+        mock2();
+      }
+    }
+
+    const fuckedUpPromise2 = new FuckedUpPromise2();
+
+    const promise2 = wrapPromiseInStatusMonitor(
+      fuckedUpPromise2 as Promise<unknown>,
+    );
+
+    try {
+      await promise2;
+    } catch (error) {}
+
+    expect(promise2.isRejected).toBe(true);
+
+    if (promise2.isRejected) expect(promise2.error).toBe(err);
+
+    expect(mock2).toHaveBeenCalledOnce();
+  });
+
+  it("Doesn't call setting trackingPromise when not needed", async () => {
+    const mock1 = vi.fn();
+    class CustomPromise {
+      fn: () => void;
+      constructor(fn: () => void) {
+        this.fn = fn;
+      }
+
+      then(onFulfilled: () => void, onRejected: () => void) {
+        mock1(onFulfilled, onRejected);
+      }
+    }
+
+    const asd = PromiseReject(new CustomPromise(mock1));
+
+    expect(mock1).toHaveBeenCalledTimes(0);
+
+    asd.then(void 0, () => {});
+  });
+
+  it('Calls setting trackingPromise when needed', async () => {
+    const mock1 = vi.fn();
+    const mock2 = vi.fn();
+    class CustomPromise {
+      fn: () => void;
+      constructor(fn: () => void) {
+        this.fn = fn;
+      }
+
+      then(onFulfilled: (asd: string) => void, onRejected: () => void) {
+        mock1(onFulfilled, onRejected);
+        onFulfilled('sad');
+        return {
+          then() {
+            mock2();
+            return {};
+          },
+        };
+      }
+    }
+
+    const asd = PromiseResolve(new CustomPromise(mock1));
+    expect(mock1).toHaveBeenCalledTimes(1);
+    expect(mock2).toHaveBeenCalledTimes(0);
+    await asd;
+
+    expect(mock1).toHaveBeenCalledTimes(1);
+    expect(mock2).toHaveBeenCalledTimes(0);
+
+    const obj = PromiseResolve('123');
+
+    expect(obj.status).toBe('fulfilled');
+    expect(obj.result).toBe('123');
+
+    const spy = vi.spyOn(obj, 'then');
+
+    expect(spy).toHaveBeenCalledTimes(0);
+
+    const asd2 = PromiseResolve(obj);
+
+    expect(asd2.status).toBe('fulfilled');
+    expect(asd2.result).toBe('123');
+
+    expect(spy).toHaveBeenCalledTimes(0);
+
+    const res = await asd2;
+
+    expect(mock1).toHaveBeenCalledTimes(1);
+    expect(res).toBe('123');
+    expect(asd2.status).toBe('fulfilled');
+    expect(asd2.result).toBe('123');
+  });
+
+  it('case fuck it', async () => {
+    const mock1 = vi.fn();
+    const mock2 = vi.fn();
+
+    class CustomPromise {
+      marker = true;
+      then(onFulfilled: (asd: string) => void, onRejected: () => void) {
+        mock1(onFulfilled, onRejected);
+        onFulfilled('sad');
+        return {
+          then(onFulfilled: (asd: string) => void) {
+            onFulfilled('sad');
+            mock2();
+            return {};
+          },
+        };
+      }
+    }
+
+    const asd = PromiseReject(new CustomPromise());
+    expect(mock1).toHaveBeenCalledTimes(0);
+    expect(mock2).toHaveBeenCalledTimes(0);
+
+    try {
+      await asd;
+      expect.unreachable();
+    } catch (error) {
+      expect(error.marker).toBe(true);
+    }
+
+    expect(mock1).toHaveBeenCalledTimes(0);
+    expect(mock2).toHaveBeenCalledTimes(0);
+  });
+
+  it('case fuck it 2', async () => {
+    const mock1 = vi.fn();
+    const newProm = new Promise((resolve, reject) => {
+      setTimeout(() => {
+        mock1();
+        resolve(123);
+      }, 10);
+    });
+
+    const spy = vi.spyOn(newProm, 'then');
+    const spyConsole = vi.spyOn(console, 'error');
+
+    const asd = PromiseResolve(newProm);
+
+    expect(mock1).toHaveBeenCalledTimes(0);
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    await asd;
+
+    expect(mock1).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledTimes(1);
+    await new Promise((resolve, reject) => {
+      setTimeout(() => {
+        mock1();
+        resolve(123);
+      }, 10);
+    });
+
+    expect(spyConsole).not.toHaveBeenCalledWith(
+      `Can't %s promise, that's already %s`,
+      'fulfill',
+      'fulfilled',
+    );
   });
 });
 

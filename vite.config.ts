@@ -8,7 +8,7 @@ export default defineConfig({
   test: {
     exclude: [
       ...defaultExclude,
-      '**/{tmp,gh-page,.stryker-tmp,.github,.vscode,reports,scripts}/**',
+      '**/{.github,.stryker-tmp,.vscode,dist,gh-page,node_modules,reports,scripts,tmp}/**',
     ],
     coverage: {
       enabled: true,
