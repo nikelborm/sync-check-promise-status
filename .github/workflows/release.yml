@@ -95,3 +95,4 @@ jobs:
             ## Files in this release
 
             - `${{ steps.package_info.outputs.expected_package_archive_name }}` contains package archive which was published to NPM
+
