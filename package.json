@@ -28,7 +28,7 @@
     "prettier": "^3.5.3",
     "rimraf": "^6.0.1",
     "ts-patch": "^3.3.0",
-    "tstyche": "^4.0.0",
+    "tstyche": "^5.0.0",
     "typescript": "^5.8.3",
     "vitest": "^4.0.3"
   },
