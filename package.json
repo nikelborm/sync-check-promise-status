@@ -20,7 +20,7 @@
     "watch-docs": "find types.ts errors.ts consts.ts index.ts wrapPromise.ts patchPromiseGlobally.ts ./scripts/generate_docs.sh | entr -can ./scripts/generate_docs.sh"
   },
   "devDependencies": {
-    "@stryker-mutator/vitest-runner": "^9.0.1",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@total-typescript/ts-reset": "^0.6.1",
     "@types/node": "^26.0.0",
     "@vitest/coverage-v8": "^4.0.3",
